@@ -1,0 +1,43 @@
+name: build-macos
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch: {}
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: aurora-wallpaper/package-lock.json
+      - name: 安装依赖
+        run: npm ci
+        working-directory: aurora-wallpaper
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '>=1.24.0'
+      - name: 构建 pq-client（mac arm64 + x64）
+        run: node scripts/build-pq-client.mjs --all
+        working-directory: aurora-wallpaper
+      - name: 运行测试（含 pq-client 集成测试，验证 Go 助手在 macOS 可用）
+        run: npm test
+        working-directory: aurora-wallpaper
+      - name: pq-client macOS TLS 冒烟验证（真实服务器握手）
+        run: |
+          set -e
+          echo '{"url":"https://www.likegpt.top/v1/chat/completions","apiKey":"smoke-test","body":{"model":"qwen-image"},"timeoutMs":30000}' | tools/pq-client/bin/mac-arm64/pq-client | node -e "const r=JSON.parse(require('fs').readFileSync(0,'utf8')); if(!r.ok||typeof r.status!=='number'){console.error('arm64 握手失败:',r);process.exit(1)} console.log('arm64 握手成功, HTTP', r.status)"
+          echo '{"url":"https://www.likegpt.top/v1/chat/completions","apiKey":"smoke-test","body":{"model":"qwen-image"},"timeoutMs":30000}' | arch -x86_64 tools/pq-client/bin/mac-x64/pq-client | node -e "const r=JSON.parse(require('fs').readFileSync(0,'utf8')); if(!r.ok||typeof r.status!=='number'){console.error('x64 握手失败:',r);process.exit(1)} console.log('x64 握手成功, HTTP', r.status)"
+        working-directory: aurora-wallpaper
+      - name: 构建 macOS 安装包
+        run: npm run dist:mac
+        working-directory: aurora-wallpaper
+        env:
+          ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-wallpaper-macos
+          path: aurora-wallpaper/release/*.dmg

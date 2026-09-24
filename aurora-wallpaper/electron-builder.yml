@@ -1,0 +1,34 @@
+appId: com.aurora.wallpaper
+productName: Aurora Wallpaper
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**/*
+  - dist-renderer/**/*
+  - package.json
+  - "!**/*.map"
+asar: true
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.ico
+  # pq-client：Go 编译的 HTTP 助手（携带 X25519MLKEM768 keyshare 的 TLS 1.3 客户端），
+  # 复制到 resources/pq-client/，随安装包分发，目标机器无需任何运行时依赖。
+  extraResources:
+    - from: tools/pq-client/bin/win-x64/pq-client.exe
+      to: pq-client/pq-client.exe
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: Aurora Wallpaper
+mac:
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  category: public.app-category.utilities
+  extraResources:
+    - from: tools/pq-client/bin/mac-${arch}/pq-client
+      to: pq-client/pq-client
