@@ -2,7 +2,12 @@ name: build-macos
 on:
   push:
     branches: [main, master]
+    tags: ["v*"]
   workflow_dispatch: {}
+
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-latest
@@ -49,3 +54,9 @@ jobs:
         with:
           name: aurora-wallpaper-macos
           path: aurora-wallpaper/release/*.dmg
+      - name: 发布 DMG 到 GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          release_name: ${{ github.ref_name }}
+          files: aurora-wallpaper/release/*.dmg
