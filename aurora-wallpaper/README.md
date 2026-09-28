@@ -1,6 +1,6 @@
 # Aurora Wallpaper · AI 壁纸工坊
 
-跨平台 AI 桌面壁纸应用（Electron + React + TypeScript）。输入文字描述，选择风格，一键生成 AI 壁纸并设置为桌面壁纸。
+跨平台 AI 桌面壁纸应用（Electron + React + TypeScript）。输入文字描述，选择风格，一键生成 AI 壁纸并设置为桌面壁纸；内置每日图片（Bing 每日壁纸 + AI 每日主题），发现好图即刻上桌。
 
 ## 功能特性
 
@@ -8,7 +8,21 @@
 - **多风格预设**：内置多种风格模板，一键套用
 - **一键设壁纸**：生成后直接设置为系统桌面壁纸（Windows / macOS）
 - **历史记录**：本地保存生成历史，随时回看与重新设置
+- **每日图片**：Bing 每日壁纸（近 8 天浏览 + 一键设壁纸）+ AI 每日主题（本地主题池按日轮换，每日 6 主题，一键生成）
 - **跨平台**：Windows x64（NSIS 安装包）、macOS arm64/x64（DMG）
+
+## 下载安装
+
+从 GitHub Release 下载对应平台的安装包：
+
+**<https://github.com/aoersen/AI-Wallpaper-Generator/releases/tag/v0.2.0>**
+
+- **Windows**：下载 `Aurora.Wallpaper.Setup.0.2.0.exe`（NSIS 安装包，支持自定义安装路径与桌面快捷方式）
+- **macOS**：下载对应架构的 DMG：
+  - Apple Silicon（M1/M2/M3/M4）：`Aurora.Wallpaper-0.2.0-arm64.dmg`
+  - Intel 芯片：`Aurora.Wallpaper-0.2.0.dmg`（无后缀的 .dmg 即 Intel x64 版）
+
+> 网络助手 pq-client 已随安装包分发，目标机器无需安装任何额外运行时。
 
 ## 快速开始
 
@@ -39,11 +53,11 @@ npm run dev
 
 ### 主界面流程
 
-1. **输入描述**：在输入框中用文字描述想要的壁纸（如"极光下的雪山湖泊"）
-2. **选择风格**：从风格列表中选择一个风格模板
-3. **完善参数**（可选）：调整尺寸等参数
-4. **生成**：点击生成按钮，等待 AI 出图（有进度提示）
-5. **设壁纸**：生成完成后点击"设为壁纸"，图片将自动下载到本地并设置为桌面壁纸
+打开应用默认进入 **每日图片** 页（三 Tab：每日图片 / 创作 / 历史）：
+
+1. **每日图片**：浏览 Bing 每日壁纸（今日大图 + 近 8 天横向卡片），一键设为桌面壁纸；下方 AI 每日主题按日轮换 6 个主题，点击即可一键生成
+2. **创作**：在输入框用文字描述想要的壁纸（如"极光下的雪山湖泊"），选择风格模板，可选调整尺寸等参数；点击生成，等待 AI 出图（有进度提示）；生成完成后点击"设为壁纸"，图片将自动下载到本地并设置为桌面壁纸
+3. **历史**：回看全部本地生成历史，随时重新设置壁纸或删除记录
 
 ## 构建
 
@@ -53,7 +67,7 @@ npm run dev
 npm run dist:win
 ```
 
-构建会自动执行 `build:pq-client`（需要 Go ≥ 1.24）编译内置网络助手并打进安装包。产物位于 `release/` 目录：`Aurora Wallpaper Setup 0.1.0.exe`（NSIS 安装包，支持自定义安装路径与桌面快捷方式）。
+构建会自动执行 `build:pq-client`（需要 Go ≥ 1.24）编译内置网络助手并打进安装包。产物位于 `release/` 目录：`Aurora Wallpaper Setup 0.2.0.exe`（NSIS 安装包，支持自定义安装路径与桌面快捷方式）。
 
 ### macOS
 
@@ -63,11 +77,11 @@ npm run dist:win
 npm run dist:mac
 ```
 
-产物位于 `release/` 目录：`Aurora Wallpaper-0.1.0-arm64.dmg` 与 `Aurora Wallpaper-0.1.0-x64.dmg`。
+产物位于 `release/` 目录：`Aurora Wallpaper-0.2.0-arm64.dmg` 与 `Aurora Wallpaper-0.2.0.dmg`（Intel x64 版无架构后缀）。
 
 **方式二：GitHub Actions 自动构建**
 
-将代码推送到 `main` / `master` 分支（或在 Actions 页面手动触发 `build-macos` 工作流），工作流会自动构建 DMG 并作为 artifact 上传：
+将代码推送到 `main` / `master` 分支（或在 Actions 页面手动触发 `build-macos` 工作流），工作流会自动构建 DMG 并作为 artifact 上传；若推送 `v*` 形式的 tag 触发，还会自动把 DMG 附件发布到对应 tag 的 GitHub Release（v0.2.0 即此流程产出）：
 
 - 工作流文件：`.github/workflows/build-mac.yml`
 - 产物名称：`aurora-wallpaper-macos`（包含 `release/*.dmg`）
@@ -88,9 +102,11 @@ npm run icons   # 生成 build/icon.png（512x512）与 build/icon.ico（内嵌 
 aurora-wallpaper/
 ├── src/
 │   ├── main/            # Electron 主进程（编译产物 → dist/main/）
+│   │   ├── services/    # 主进程业务服务（qwenClient / wallpaperStore / dailyService 等）
+│   │   └── ipc/         # IPC handler 注册（按域拆分：settings / generate / wallpaper / daily / history / env）
 │   ├── preload/         # preload 安全 IPC 桥（编译产物 → dist/preload/）
 │   ├── renderer/        # 前端 React 应用（Vite 入口，含 index.html）
-│   │   └── src/         # 渲染进程源码（main.tsx、App.tsx、styles.css）
+│   │   └── src/         # 渲染进程源码（main.tsx、App.tsx、components/、styles.css）
 │   └── shared/          # 主进程/渲染进程共享类型与 IPC 通道常量
 ├── tests/               # 测试用例（vitest）
 ├── build/               # 应用图标（icon.png / icon.ico）
@@ -118,6 +134,8 @@ aurora-wallpaper/
 | `generate:progress` | main → renderer | 生成进度事件推送 |
 | `wallpaper:download` | renderer → main | 下载图片到本地 |
 | `wallpaper:set` | renderer → main | 将本地图片设置为系统壁纸 |
+| `daily:list` | renderer → main | 获取每日图片数据（Bing 每日壁纸 + 本地每日主题） |
+| `daily:set-wallpaper` | renderer → main | 下载 Bing 每日壁纸并设置壁纸（URL 白名单校验） |
 | `history:list` | renderer → main | 查询生成历史列表 |
 | `history:delete` | renderer → main | 删除历史记录 |
 | `env:platform` | renderer → main | 获取当前运行平台（win32 / darwin） |
@@ -134,7 +152,7 @@ aurora-wallpaper/
 npm test
 ```
 
-运行 vitest 测试套件（54 用例），覆盖主进程逻辑、IPC 桥接与工具函数；`tests/qwenHttp.test.ts` 为 pq-client 集成测试（二进制缺失时自动跳过）。
+运行 vitest 测试套件（78 用例），覆盖主进程逻辑、IPC 桥接与工具函数；`tests/qwenHttp.test.ts` 为 pq-client 集成测试（二进制缺失时自动跳过），`tests/dailyService.test.ts` 覆盖每日图片服务（Bing 解析、主题轮换、URL 白名单校验）。
 
 ## 常见问题
 

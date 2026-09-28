@@ -1037,7 +1037,10 @@ img {
   justify-content: center;
   font-size: 24px;
   border-radius: var(--radius-md);
+  /* C2：底色由 DailyPanel 按主题类别内联注入双色调渐变（见 ICON_GRADIENTS），
+     此处仅保留兜底纯色与渐变上角的对比度处理 */
   background: var(--brand-soft);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
 }
 
 .theme-card__name {

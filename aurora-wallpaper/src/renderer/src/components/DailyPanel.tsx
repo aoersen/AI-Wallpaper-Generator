@@ -13,6 +13,31 @@ const ICON_MAP: Record<string, string> = {
 
 function iconFor(icon: string): string { return ICON_MAP[icon] ?? '🎨'; }
 
+/**
+ * C2：主题类别 → 品牌系双色调渐变（浅色简洁风调性下做视觉差异化）。
+ *
+ * 十个类别各配一组渐变，色相彼此区分、饱和度收敛，与 --brand 品牌蓝紫
+ * （#4f7cff → #8a5cf6）同族协调；覆盖 dailyThemes 全部 10 类 icon 键。
+ * 未命中时回落品牌渐变本身。
+ */
+const ICON_GRADIENTS: Record<string, string> = {
+  mountain: 'linear-gradient(135deg, #4f7cff, #38d6b4)', // 山川：品牌蓝 → 青绿
+  lake: 'linear-gradient(135deg, #38bdf8, #818cf8)', // 湖海：天蓝 → 靛蓝
+  starry: 'linear-gradient(135deg, #6366f1, #a855f7)', // 星空：靛紫 → 亮紫
+  city: 'linear-gradient(135deg, #8b5cf6, #ec4899)', // 城市：紫 → 品红
+  chinese: 'linear-gradient(135deg, #f97316, #ef4444)', // 国风：暖橙 → 中国红
+  pet: 'linear-gradient(135deg, #fbbf24, #fb7185)', // 萌宠：暖金 → 珊瑚粉
+  solar: 'linear-gradient(135deg, #22c55e, #facc15)', // 节气：新绿 → 明黄
+  abstract: 'linear-gradient(135deg, #06b6d4, #8a5cf6)', // 抽象：青 → 品牌紫
+  flower: 'linear-gradient(135deg, #f472b6, #fbbf24)', // 花草：樱粉 → 暖金
+  forest: 'linear-gradient(135deg, #16a34a, #0d9488)', // 森林：深绿 → 青碧
+};
+
+/** 默认渐变：品牌蓝紫本身（icon 键未命中时兜底，与主按钮同源） */
+const DEFAULT_ICON_GRADIENT = 'linear-gradient(135deg, #4f7cff, #8a5cf6)';
+
+function gradientFor(icon: string): string { return ICON_GRADIENTS[icon] ?? DEFAULT_ICON_GRADIENT; }
+
 function todayKey(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -116,7 +141,7 @@ function ThemeSection({ themes, onGenerate }: ThemeSectionProps) {
           const isPending = pending.has(theme.id);
           return (
             <div key={theme.id} className="theme-card card card--hover">
-              <div className="theme-card__icon">{iconFor(theme.icon)}</div>
+              <div className="theme-card__icon" style={{ background: gradientFor(theme.icon) }}>{iconFor(theme.icon)}</div>
               <h4 className="theme-card__name">{theme.name}</h4>
               <p className="theme-card__desc">{theme.description}</p>
               <div className="theme-card__footer">{done && <span className="badge badge--success">已生成</span>}<button className="btn btn--primary btn--sm" disabled={isPending} onClick={() => handleGenerate(theme)}>{isPending ? '生成中…' : done ? '再生成' : '生成'}</button></div>
