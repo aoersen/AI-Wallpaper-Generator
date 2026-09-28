@@ -11,9 +11,10 @@ interface ResultGridProps {
   items: ResultGridItem[];
   onSetWallpaper: (id: string) => void;
   onToggleReference: (record: WallpaperRecord) => void;
+  onPreview: (record: WallpaperRecord) => void;
 }
 
-export default function ResultGrid({ items, onSetWallpaper, onToggleReference }: ResultGridProps) {
+export default function ResultGrid({ items, onSetWallpaper, onToggleReference, onPreview }: ResultGridProps) {
   if (items.length === 0) {
     return (
       <div className="empty">
@@ -34,6 +35,7 @@ export default function ResultGrid({ items, onSetWallpaper, onToggleReference }:
           selected={item.selected}
           onSetWallpaper={onSetWallpaper}
           onToggleReference={onToggleReference}
+          onPreview={onPreview}
         />
       ))}
     </div>

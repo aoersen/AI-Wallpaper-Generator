@@ -44,6 +44,7 @@ export default function SettingsDialog({ open, settings, onSave, onClose }: Sett
     const v = validate(form); setErrors(v); if (Object.keys(v).length > 0) return;
     setSaving(true);
     try { await onSave(form); setDirty(false); onClose(); }
+    catch { /* 保存失败：App 已通过 toast 提示错误，保持弹窗打开便于修改 */ }
     finally { setSaving(false); }
   };
 

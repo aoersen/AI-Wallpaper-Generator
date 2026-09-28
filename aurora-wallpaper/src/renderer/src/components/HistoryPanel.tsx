@@ -9,6 +9,7 @@ interface HistoryPanelProps {
   onSetWallpaper: (record: WallpaperRecord) => void;
   onToggleReference: (record: WallpaperRecord) => void;
   selectedIds: string[];
+  onPreview: (record: WallpaperRecord) => void;
 }
 
 function formatTime(iso: string): string {
@@ -21,7 +22,7 @@ function styleLabel(styleId: string): string {
 }
 
 export default function HistoryPanel({
-  records, loading, onRefresh, onDelete, onSetWallpaper, onToggleReference, selectedIds,
+  records, loading, onRefresh, onDelete, onSetWallpaper, onToggleReference, selectedIds, onPreview,
 }: HistoryPanelProps) {
   if (loading && records.length === 0) {
     return (
@@ -53,7 +54,14 @@ export default function HistoryPanel({
           return (
             <li key={record.id} className={isSelected ? 'history-item history-item--selected' : 'history-item'}>
               <div className="history-item__media">
-                {record.filePath ? (<img src={record.filePath} alt={record.rawInput || '历史壁纸'} className="history-item__thumb" loading="lazy" />) : (<div className="history-item__thumb history-item__thumb--placeholder">无图</div>)}
+                {record.filePath ? (
+                  <img
+                    src={record.filePath} alt={record.rawInput || '历史壁纸'} className="history-item__thumb" loading="lazy"
+                    role="button" tabIndex={0} aria-label="查看大图"
+                    onClick={() => onPreview(record)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPreview(record); } }}
+                  />
+                ) : (<div className="history-item__thumb history-item__thumb--placeholder">无图</div>)}
               </div>
               <div className="history-item__info">
                 <p className="history-item__prompt" title={record.rawInput}>{record.rawInput.length > 60 ? `${record.rawInput.slice(0, 60)}…` : record.rawInput}</p>

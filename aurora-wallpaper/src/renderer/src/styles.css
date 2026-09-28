@@ -805,6 +805,8 @@ img {
   left: 50%;
   transform: translateX(-50%);
   z-index: 2000;
+  /* 纯信息展示，不拦截期间的用户点击 */
+  pointer-events: none;
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -928,6 +930,16 @@ img {
   justify-content: flex-end;
   padding: var(--space-6);
   background: linear-gradient(180deg, transparent 20%, rgba(15, 23, 42, 0.1) 50%, rgba(15, 23, 42, 0.72) 100%);
+  cursor: zoom-in;
+}
+
+.bing-hero__overlay:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -4px;
+}
+
+.bing-hero__overlay .btn {
+  cursor: pointer;
 }
 
 .bing-hero__info {
@@ -1026,7 +1038,12 @@ img {
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-5);
-  cursor: default;
+  cursor: pointer;
+}
+
+.theme-card:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 
 .theme-card__icon {
@@ -1293,6 +1310,7 @@ img {
   height: 100%;
   object-fit: cover;
   display: block;
+  cursor: zoom-in;
 }
 
 .image-card__skeleton {
@@ -1459,6 +1477,7 @@ img {
   height: 100%;
   object-fit: cover;
   display: block;
+  cursor: zoom-in;
 }
 
 .history-item__thumb--placeholder {
@@ -1510,4 +1529,71 @@ img {
   width: 15px;
   height: 15px;
   cursor: pointer;
+}
+
+/* ------------------------------------------------------------------ */
+/* 大图预览（lightbox）                                                   */
+/* ------------------------------------------------------------------ */
+
+.preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: var(--space-8) var(--space-6);
+  background: rgba(11, 14, 20, 0.85);
+  backdrop-filter: blur(6px);
+  cursor: zoom-out;
+  animation: preview-in var(--transition-base);
+}
+
+@keyframes preview-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.preview__close {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: var(--radius-full);
+  background: rgba(15, 23, 42, 0.6);
+  color: #fff;
+  font-size: var(--text-base);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.preview__close:hover {
+  background: rgba(15, 23, 42, 0.9);
+}
+
+.preview__img {
+  max-width: 92vw;
+  max-height: 82vh;
+  object-fit: contain;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  cursor: zoom-out;
+}
+
+.preview__title {
+  max-width: 92vw;
+  margin: 0;
+  font-size: var(--text-sm);
+  color: rgba(255, 255, 255, 0.9);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

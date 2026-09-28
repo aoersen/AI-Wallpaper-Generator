@@ -15,12 +15,12 @@
 
 从 GitHub Release 下载对应平台的安装包：
 
-**<https://github.com/aoersen/AI-Wallpaper-Generator/releases/tag/v0.2.0>**
+**<https://github.com/aoersen/AI-Wallpaper-Generator/releases/tag/v0.2.1>**
 
-- **Windows**：下载 `Aurora.Wallpaper.Setup.0.2.0.exe`（NSIS 安装包，支持自定义安装路径与桌面快捷方式）
+- **Windows**：下载 `Aurora.Wallpaper.Setup.0.2.1.exe`（NSIS 安装包，支持自定义安装路径与桌面快捷方式）
 - **macOS**：下载对应架构的 DMG：
-  - Apple Silicon（M1/M2/M3/M4）：`Aurora.Wallpaper-0.2.0-arm64.dmg`
-  - Intel 芯片：`Aurora.Wallpaper-0.2.0.dmg`（无后缀的 .dmg 即 Intel x64 版）
+  - Apple Silicon（M1/M2/M3/M4）：`Aurora.Wallpaper-0.2.1-arm64.dmg`
+  - Intel 芯片：`Aurora.Wallpaper-0.2.1.dmg`（无后缀的 .dmg 即 Intel x64 版）
 
 > 网络助手 pq-client 已随安装包分发，目标机器无需安装任何额外运行时。
 
@@ -67,7 +67,7 @@ npm run dev
 npm run dist:win
 ```
 
-构建会自动执行 `build:pq-client`（需要 Go ≥ 1.24）编译内置网络助手并打进安装包。产物位于 `release/` 目录：`Aurora Wallpaper Setup 0.2.0.exe`（NSIS 安装包，支持自定义安装路径与桌面快捷方式）。
+构建会自动执行 `build:pq-client`（需要 Go ≥ 1.24）编译内置网络助手并打进安装包。产物位于 `release/` 目录：`Aurora Wallpaper Setup 0.2.1.exe`（NSIS 安装包，支持自定义安装路径与桌面快捷方式）。
 
 ### macOS
 
@@ -77,11 +77,11 @@ npm run dist:win
 npm run dist:mac
 ```
 
-产物位于 `release/` 目录：`Aurora Wallpaper-0.2.0-arm64.dmg` 与 `Aurora Wallpaper-0.2.0.dmg`（Intel x64 版无架构后缀）。
+产物位于 `release/` 目录：`Aurora Wallpaper-0.2.1-arm64.dmg` 与 `Aurora Wallpaper-0.2.1.dmg`（Intel x64 版无架构后缀）。
 
 **方式二：GitHub Actions 自动构建**
 
-将代码推送到 `main` / `master` 分支（或在 Actions 页面手动触发 `build-macos` 工作流），工作流会自动构建 DMG 并作为 artifact 上传；若推送 `v*` 形式的 tag 触发，还会自动把 DMG 附件发布到对应 tag 的 GitHub Release（v0.2.0 即此流程产出）：
+将代码推送到 `main` / `master` 分支（或在 Actions 页面手动触发 `build-macos` 工作流），工作流会自动构建 DMG 并作为 artifact 上传；若推送 `v*` 形式的 tag 触发，还会自动把 DMG 附件发布到对应 tag 的 GitHub Release（v0.2.1 即此流程产出）：
 
 - 工作流文件：`.github/workflows/build-mac.yml`
 - 产物名称：`aurora-wallpaper-macos`（包含 `release/*.dmg`）

@@ -5,8 +5,9 @@ import ResultGrid, { type ResultGridItem } from './components/ResultGrid';
 import HistoryPanel from './components/HistoryPanel';
 import SettingsDialog from './components/SettingsDialog';
 import DailyPanel from './components/DailyPanel';
+import ImagePreview from './components/ImagePreview';
 import {
-  getSettings, getScreen, listHistory, deleteHistory,
+  getSettings, saveSettings, getScreen, listHistory, deleteHistory,
   setWallpaper, generateImage, onGenerateProgress,
   listDaily, setDailyWallpaper,
 } from './ui/ipcClient';
@@ -61,6 +62,7 @@ export default function App() {
   const [toast, setToast] = useState<{ type: 'error' | 'success' | 'info'; text: string } | null>(null);
   const [historyRecords, setHistoryRecords] = useState<WallpaperRecord[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [preview, setPreview] = useState<{ src: string; title: string } | null>(null);
 
   const showToast = useCallback((type: 'error' | 'success' | 'info', text: string) => {
     setToast({ type, text });
@@ -257,6 +259,26 @@ export default function App() {
 
   const handleClearRefs = useCallback(() => { setSelectedRefIds([]); setGenerateMode('text-to-image'); }, []);
 
+  // 保存设置：落盘到 userData/settings.json（失败时抛错，由 SettingsDialog 保持弹窗打开）
+  const handleSaveSettings = useCallback(async (s: AppSettings) => {
+    try {
+      const res = await saveSettings({ settings: s });
+      if (!res.ok) throw new Error('设置保存失败');
+      setSettings(res.settings);
+      showToast('success', '设置已保存');
+    } catch (err: unknown) {
+      showToast('error', err instanceof Error ? err.message : '设置保存失败');
+      throw err;
+    }
+  }, [showToast]);
+
+  // 大图预览
+  const handlePreview = useCallback((src: string, title: string) => { setPreview({ src, title }); }, []);
+  const handlePreviewRecord = useCallback((record: WallpaperRecord) => {
+    setPreview({ src: record.filePath, title: record.rawInput || record.fileName });
+  }, []);
+  const closePreview = useCallback(() => { setPreview(null); }, []);
+
   // 渲染每日
   const renderDaily = () => (
     <DailyPanel
@@ -264,6 +286,7 @@ export default function App() {
       bingError={dailyData.bingError} bingLoading={bingLoading}
       onRetryBing={loadDaily} onSetDailyWallpaper={handleSetDailyWallpaper}
       onGenerateTheme={handleGenerateTheme}
+      onPreview={handlePreview}
     />
   );
 
@@ -290,6 +313,7 @@ export default function App() {
         items={gridItems}
         onSetWallpaper={(id) => { const item = gridItems.find((i) => i.record?.id === id); if (item?.record) handleSetWallpaperFromRecord(item.record); }}
         onToggleReference={handleToggleReference}
+        onPreview={handlePreviewRecord}
       />
     </div>
   );
@@ -302,6 +326,7 @@ export default function App() {
       onSetWallpaper={handleSetWallpaperFromRecord}
       onToggleReference={handleToggleReference}
       selectedIds={selectedRefIds}
+      onPreview={handlePreviewRecord}
     />
   );
 
@@ -360,10 +385,13 @@ export default function App() {
       {settings && (
         <SettingsDialog
           open={settingsOpen} settings={settings}
-          onSave={async (s: AppSettings) => { setSettings(s); showToast('success', '设置已保存'); }}
+          onSave={handleSaveSettings}
           onClose={() => setSettingsOpen(false)}
         />
       )}
+
+      {/* 大图预览 */}
+      {preview && <ImagePreview src={preview.src} title={preview.title} onClose={closePreview} />}
 
       {/* Toast */}
       {toast && (

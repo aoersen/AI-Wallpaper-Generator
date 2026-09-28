@@ -58,9 +58,9 @@ function isThemeGenerated(theme: DailyTheme, records: WallpaperRecord[]): boolea
   return records.some((r) => r.createdAt.slice(0, 10) === today && r.prompt.startsWith(theme.description));
 }
 
-interface BingSectionProps { items: BingDailyItem[]; loading: boolean; error: string | null; onRetry: () => void; onSetWallpaper: (url: string, fileName: string) => void; }
+interface BingSectionProps { items: BingDailyItem[]; loading: boolean; error: string | null; onRetry: () => void; onSetWallpaper: (url: string, fileName: string) => void; onPreview: (src: string, title: string) => void; }
 
-function BingSection({ items, loading, error, onRetry, onSetWallpaper }: BingSectionProps) {
+function BingSection({ items, loading, error, onRetry, onSetWallpaper, onPreview }: BingSectionProps) {
   const [activeIdx, setActiveIdx] = useState(0);
   const active = items[activeIdx] ?? null;
 
@@ -79,9 +79,14 @@ function BingSection({ items, loading, error, onRetry, onSetWallpaper }: BingSec
       <div className="daily-section__header"><h3 className="daily-section__title">今日壁纸</h3><span className="badge badge--brand">Bing 每日精选</span></div>
       <div className="bing-hero">
         <img src={active.url} alt={active.title} className="bing-hero__img" />
-        <div className="bing-hero__overlay">
+        <div
+          className="bing-hero__overlay"
+          role="button" tabIndex={0} aria-label="查看大图"
+          onClick={() => onPreview(active.url, active.title)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPreview(active.url, active.title); } }}
+        >
           <div className="bing-hero__info"><h4 className="bing-hero__title">{active.title}</h4><p className="bing-hero__copyright">{active.copyright}</p></div>
-          <button className="btn btn--primary" onClick={() => onSetWallpaper(active.url, `bing-${active.date}.jpg`)}>设为壁纸</button>
+          <button className="btn btn--primary" onClick={(e) => { e.stopPropagation(); onSetWallpaper(active.url, `bing-${active.date}.jpg`); }} onKeyDown={(e) => e.stopPropagation()}>设为壁纸</button>
         </div>
       </div>
       <div className="bing-strip">
@@ -128,6 +133,7 @@ function ThemeSection({ themes, onGenerate }: ThemeSectionProps) {
   }
 
   const handleGenerate = (theme: DailyTheme): void => {
+    if (pending.has(theme.id)) return;
     setPending((prev) => new Set(prev).add(theme.id));
     onGenerate(theme);
   };
@@ -140,11 +146,16 @@ function ThemeSection({ themes, onGenerate }: ThemeSectionProps) {
           const done = generatedIds.has(theme.id);
           const isPending = pending.has(theme.id);
           return (
-            <div key={theme.id} className="theme-card card card--hover">
+            <div
+              key={theme.id} className="theme-card card card--hover"
+              role="button" tabIndex={0} aria-label={`使用主题「${theme.name}」生成壁纸`}
+              onClick={() => handleGenerate(theme)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleGenerate(theme); } }}
+            >
               <div className="theme-card__icon" style={{ background: gradientFor(theme.icon) }}>{iconFor(theme.icon)}</div>
               <h4 className="theme-card__name">{theme.name}</h4>
               <p className="theme-card__desc">{theme.description}</p>
-              <div className="theme-card__footer">{done && <span className="badge badge--success">已生成</span>}<button className="btn btn--primary btn--sm" disabled={isPending} onClick={() => handleGenerate(theme)}>{isPending ? '生成中…' : done ? '再生成' : '生成'}</button></div>
+              <div className="theme-card__footer">{done && <span className="badge badge--success">已生成</span>}<button className="btn btn--primary btn--sm" disabled={isPending} onClick={(e) => { e.stopPropagation(); handleGenerate(theme); }} onKeyDown={(e) => e.stopPropagation()}>{isPending ? '生成中…' : done ? '再生成' : '生成'}</button></div>
             </div>
           );
         })}
@@ -161,12 +172,13 @@ interface DailyPanelProps {
   onRetryBing: () => void;
   onSetDailyWallpaper: (url: string, fileName: string) => void;
   onGenerateTheme: (theme: DailyTheme) => void;
+  onPreview: (src: string, title: string) => void;
 }
 
-export default function DailyPanel({ bing, themes, bingLoading, bingError, onRetryBing, onSetDailyWallpaper, onGenerateTheme }: DailyPanelProps) {
+export default function DailyPanel({ bing, themes, bingLoading, bingError, onRetryBing, onSetDailyWallpaper, onGenerateTheme, onPreview }: DailyPanelProps) {
   return (
     <div className="daily-panel">
-      <BingSection items={bing} loading={bingLoading} error={bingError} onRetry={onRetryBing} onSetWallpaper={onSetDailyWallpaper} />
+      <BingSection items={bing} loading={bingLoading} error={bingError} onRetry={onRetryBing} onSetWallpaper={onSetDailyWallpaper} onPreview={onPreview} />
       <ThemeSection themes={themes} onGenerate={onGenerateTheme} />
     </div>
   );
