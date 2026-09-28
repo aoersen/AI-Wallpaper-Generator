@@ -225,6 +225,54 @@ export interface IpcError {
 }
 
 /* ------------------------------------------------------------------ */
+/* 每日图片（Bing 每日壁纸 + AI 每日主题）                                */
+/* ------------------------------------------------------------------ */
+
+/** Bing 每日壁纸条目 */
+export interface BingDailyItem {
+  /** 本地日期显示，如 2026-09-28 */
+  date: string;
+  /** 壁纸标题（如"连绵起伏的群山"） */
+  title: string;
+  /** 版权/出处说明 */
+  copyright: string;
+  /** 图片完整 URL（https://cn.bing.com + path） */
+  url: string;
+  /** 缩略图 URL（小图，卡片用） */
+  thumbnailUrl: string;
+}
+
+/** AI 每日主题条目 */
+export interface DailyTheme {
+  /** 稳定 slug，如 "misty-mountains" */
+  id: string;
+  /** 中文主题名，如 "雾隐青山" */
+  name: string;
+  /** 主题描述/提示词主题句（中文，喂给 promptEngine 前的原始主题句） */
+  description: string;
+  /** 主题图标类型（UI 用，UI 完全自定义映射） */
+  icon: string;
+}
+
+/** daily:list 响应 */
+export interface DailyListResult {
+  /** Bing 每日壁纸（近 8 天，含今天；拉取失败时为空数组，UI 显示重试） */
+  bing: BingDailyItem[];
+  /** 今日 AI 主题（6 个，确定性轮换） */
+  themes: DailyTheme[];
+  /** Bing 拉取是否出错过（用于 UI 提示） */
+  bingError: string | null;
+}
+
+/** daily:set-wallpaper 请求（下载 Bing 每日壁纸并设为桌面壁纸） */
+export interface SetDailyWallpaperRequest {
+  /** Bing 图片完整 URL（必须命中 cn.bing.com / s.cn.bing.net 白名单前缀） */
+  url: string;
+  /** 保存文件名（UI 传入，用于展示与去重） */
+  fileName: string;
+}
+
+/* ------------------------------------------------------------------ */
 /* 提示词引擎相关类型（UI 使用）                                          */
 /* ------------------------------------------------------------------ */
 

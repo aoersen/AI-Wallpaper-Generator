@@ -1,0 +1,47 @@
+name: Build and Release (macOS)
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build renderer + main + preload + pq-client
+        run: npm run build
+
+      - name: Build macOS DMG (arm64 + x64)
+        run: npx electron-builder --mac --arm64 --x64
+
+      - name: Verify pq-client binary in DMG
+        run: |
+          echo "=== pq-client binary check ==="
+          ls -la tools/pq-client/bin/mac-arm64/pq-client
+          ls -la tools/pq-client/bin/mac-x64/pq-client
+
+      - name: Upload DMG to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          release_name: ${{ github.ref_name }}
+          files: |
+            release/*.dmg
+            release/*.zip

@@ -1,7 +1,7 @@
 {
   "name": "aurora-wallpaper",
   "productName": "Aurora Wallpaper",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Aurora Wallpaper · AI 壁纸工坊 —— 跨平台 AI 壁纸桌面应用",
   "private": true,
   "main": "dist/main/index.js",

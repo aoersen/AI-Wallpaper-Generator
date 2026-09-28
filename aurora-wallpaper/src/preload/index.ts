@@ -2,12 +2,13 @@
  * Aurora Wallpaper — preload 安全 IPC 桥
  *
  * contextIsolation 开启，通过 contextBridge 暴露类型化的 `window.aurora` API。
- * phase-1：通道函数齐全但主进程暂未实现，调用返回占位值（后续阶段接入真实实现）。
+ * phase-1a：接入每日图片域（listDaily / setDailyWallpaper），其余通道此前已实现。
  */
 
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC } from '../shared/ipc';
 import type {
+  DailyListResult,
   DeleteHistoryResult,
   DownloadWallpaperResult,
   GenerateProgress,
@@ -16,6 +17,7 @@ import type {
   PlatformInfo,
   SaveSettingsResult,
   ScreenInfo,
+  SetDailyWallpaperRequest,
   SetWallpaperResult,
   SettingsPayload,
 } from '../shared/types';
@@ -35,6 +37,12 @@ export interface AuroraApi {
   /* 壁纸 */
   downloadWallpaper(req: DownloadWallpaperRequest): Promise<DownloadWallpaperResult>;
   setWallpaper(req: SetWallpaperRequest): Promise<SetWallpaperResult>;
+
+  /* 每日图片（Bing 每日壁纸 + 今日 AI 主题） */
+  /** 拉取每日图片数据：Bing 近 8 天壁纸 + 今日 6 个 AI 主题（确定性轮换） */
+  listDaily(): Promise<DailyListResult>;
+  /** 下载 Bing 每日壁纸并设为桌面壁纸（url 仅允许 cn.bing.com / s.cn.bing.net 前缀） */
+  setDailyWallpaper(req: SetDailyWallpaperRequest): Promise<SetWallpaperResult>;
 
   /* 历史 */
   listHistory(): Promise<HistoryPayload>;
@@ -60,6 +68,9 @@ const api: AuroraApi = {
 
   downloadWallpaper: (req) => ipcRenderer.invoke(IPC.WALLPAPER_DOWNLOAD, req) as Promise<DownloadWallpaperResult>,
   setWallpaper: (req) => ipcRenderer.invoke(IPC.WALLPAPER_SET, req) as Promise<SetWallpaperResult>,
+
+  listDaily: () => ipcRenderer.invoke(IPC.DAILY_LIST) as Promise<DailyListResult>,
+  setDailyWallpaper: (req) => ipcRenderer.invoke(IPC.DAILY_SET_WALLPAPER, req) as Promise<SetWallpaperResult>,
 
   listHistory: () => ipcRenderer.invoke(IPC.HISTORY_LIST) as Promise<HistoryPayload>,
   deleteHistory: (ids) => ipcRenderer.invoke(IPC.HISTORY_DELETE, { ids }) as Promise<DeleteHistoryResult>,

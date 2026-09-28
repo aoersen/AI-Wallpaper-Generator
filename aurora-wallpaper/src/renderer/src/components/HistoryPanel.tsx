@@ -1,11 +1,5 @@
-/**
- * Aurora Wallpaper — 历史侧栏面板
- *
- * 展示已生成壁纸列表，支持刷新、删除、设为壁纸、选作参考。
- */
-
-import { STYLE_PRESETS } from '../../../shared/promptEngine';
-import type { WallpaperRecord } from '../../../shared/types';
+import { STYLE_PRESETS } from '../types/promptEngine';
+import type { WallpaperRecord } from '../types';
 
 interface HistoryPanelProps {
   records: WallpaperRecord[];
@@ -17,98 +11,68 @@ interface HistoryPanelProps {
   selectedIds: string[];
 }
 
-export default function HistoryPanel({
-  records,
-  loading,
-  onRefresh,
-  onDelete,
-  onSetWallpaper,
-  onToggleReference,
-  selectedIds,
-}: HistoryPanelProps) {
-  const styleLabel = (styleId: string): string =>
-    STYLE_PRESETS.find((p) => p.id === styleId)?.label ?? styleId;
+function formatTime(iso: string): string {
+  try { return new Date(iso).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+  catch { return iso; }
+}
 
-  const formatTime = (iso: string): string => {
-    try {
-      return new Date(iso).toLocaleString('zh-CN', {
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    } catch {
-      return iso;
-    }
-  };
+function styleLabel(styleId: string): string {
+  return STYLE_PRESETS.find((p) => p.id === styleId)?.label ?? styleId;
+}
+
+export default function HistoryPanel({
+  records, loading, onRefresh, onDelete, onSetWallpaper, onToggleReference, selectedIds,
+}: HistoryPanelProps) {
+  if (loading && records.length === 0) {
+    return (
+      <div className="history-panel">
+        <div className="history-panel__header"><h3 className="history-panel__title">历史图库</h3><button className="btn btn--ghost btn--sm" disabled>加载中…</button></div>
+        <div className="flex flex-col gap-3">{Array.from({ length: 3 }).map((_, i) => (<div key={i} className="history-item skeleton" style={{ height: '96px' }} />))}</div>
+      </div>
+    );
+  }
+
+  if (records.length === 0) {
+    return (
+      <div className="history-panel">
+        <div className="history-panel__header"><h3 className="history-panel__title">历史图库</h3><button className="btn btn--ghost btn--sm" onClick={onRefresh} disabled={loading}>{loading ? '加载中…' : '刷新'}</button></div>
+        <div className="empty"><span className="empty__icon">🖼️</span><p className="empty__title">暂无历史记录</p><p className="empty__desc">创作壁纸后会自动保存在这里</p></div>
+      </div>
+    );
+  }
 
   return (
-    <aside className="history-panel">
+    <div className="history-panel">
       <div className="history-panel__header">
-        <h2 className="history-panel__title">历史图库</h2>
-        <button type="button" className="history-panel__refresh" onClick={onRefresh} disabled={loading}>
-          {loading ? '刷新中…' : '刷新'}
-        </button>
+        <h3 className="history-panel__title">历史图库 <span className="text-sm text-muted font-medium ml-2">{records.length}</span></h3>
+        <button className="btn btn--ghost btn--sm" onClick={onRefresh} disabled={loading}>{loading ? '加载中…' : '刷新'}</button>
       </div>
-
-      {records.length === 0 ? (
-        <p className="history-panel__empty">暂无历史记录</p>
-      ) : (
-        <ul className="history-panel__list">
-          {records.map((record) => {
-            const isSelected = selectedIds.includes(record.id);
-            return (
-              <li key={record.id} className={isSelected ? 'history-item history-item--selected' : 'history-item'}>
-                <div className="history-item__media">
-                  {record.filePath ? (
-                    <img
-                      className="history-item__thumb"
-                      src={record.filePath}
-                      alt={record.rawInput || '历史壁纸'}
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="history-item__thumb history-item__thumb--placeholder">无图</div>
-                  )}
+      <ul className="history-list">
+        {records.map((record) => {
+          const isSelected = selectedIds.includes(record.id);
+          return (
+            <li key={record.id} className={isSelected ? 'history-item history-item--selected' : 'history-item'}>
+              <div className="history-item__media">
+                {record.filePath ? (<img src={record.filePath} alt={record.rawInput || '历史壁纸'} className="history-item__thumb" loading="lazy" />) : (<div className="history-item__thumb history-item__thumb--placeholder">无图</div>)}
+              </div>
+              <div className="history-item__info">
+                <p className="history-item__prompt" title={record.rawInput}>{record.rawInput.length > 60 ? `${record.rawInput.slice(0, 60)}…` : record.rawInput}</p>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="badge badge--brand">{styleLabel(record.styleId)}</span>
+                  <span className="text-xs text-muted">{formatTime(record.createdAt)}</span>
                 </div>
-                <div className="history-item__info">
-                  <p className="history-item__prompt" title={record.prompt}>
-                    {record.prompt.length > 60 ? `${record.prompt.slice(0, 60)}…` : record.prompt}
-                  </p>
-                  <div className="history-item__meta">
-                    <span className="history-item__style">{styleLabel(record.styleId)}</span>
-                    <span className="history-item__time">{formatTime(record.createdAt)}</span>
-                  </div>
-                  <div className="history-item__actions">
-                    <button
-                      type="button"
-                      className="history-item__btn"
-                      onClick={() => onSetWallpaper(record)}
-                    >
-                      设为壁纸
-                    </button>
-                    <button
-                      type="button"
-                      className="history-item__btn history-item__btn--danger"
-                      onClick={() => onDelete([record.id])}
-                    >
-                      删除
-                    </button>
-                    <label className="history-item__check">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => onToggleReference(record)}
-                      />
-                      <span>参考</span>
-                    </label>
-                  </div>
+                <div className="history-item__actions">
+                  <button className="btn btn--ghost btn--sm" onClick={() => onSetWallpaper(record)}>设为壁纸</button>
+                  <button className="btn btn--danger btn--sm" onClick={() => onDelete([record.id])}>删除</button>
+                  <label className="history-item__check">
+                    <input type="checkbox" checked={isSelected} onChange={() => onToggleReference(record)} /><span>参考</span>
+                  </label>
                 </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </aside>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }

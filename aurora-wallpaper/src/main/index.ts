@@ -2,6 +2,7 @@
  * Aurora Wallpaper — Electron 主进程入口
  *
  * phase-2：注册全部业务 IPC 处理器（设置/生成/壁纸/历史/环境）。
+ * phase-1a：新增每日图片域（daily:*）：Bing 每日壁纸拉取 + 今日 AI 主题推荐。
  */
 
 import { app, BrowserWindow, shell } from 'electron';
@@ -15,6 +16,8 @@ import { registerGenerateHandlers } from './ipc/generateHandlers';
 import { registerWallpaperHandlers } from './ipc/wallpaperHandlers';
 import { registerHistoryHandlers } from './ipc/historyHandlers';
 import { registerEnvHandlers } from './ipc/envHandlers';
+import { createDailyService } from './services/dailyService';
+import { registerDailyHandlers } from './ipc/dailyHandlers';
 
 /** 开发模式下 Vite dev server 地址（由 dev:electron 脚本注入） */
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
@@ -94,8 +97,13 @@ if (!app.requestSingleInstanceLock()) {
       mainWindow?.webContents.send(IPC.GENERATE_PROGRESS, progress);
     };
 
+    // 组装每日图片服务（Bing 每日壁纸 + 本地主题池）
+    // 壁纸库复用 userData/wallpapers 既有目录体系（下载转存、修剪、历史）
+    const dailyService = createDailyService({ wallpaperStore });
+
     // 注册 IPC 处理器
     registerSettingsHandlers(settingsService);
+    registerDailyHandlers({ dailyService });
     registerGenerateHandlers({ settingsService, wallpaperStore, sendProgress });
     registerWallpaperHandlers({ wallpaperStore });
     registerHistoryHandlers({ wallpaperStore });

@@ -1,397 +1,376 @@
-/**
- * Aurora Wallpaper — 渲染进程根组件（phase-3 Part-B 完整接线）
- *
- * 状态管理 + 批量生成串行流程 + 历史/设置弹窗 + 会话上下文。
- */
-
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import PromptPanel from './components/PromptPanel';
 import GenerateBar from './components/GenerateBar';
 import ResultGrid, { type ResultGridItem } from './components/ResultGrid';
 import HistoryPanel from './components/HistoryPanel';
 import SettingsDialog from './components/SettingsDialog';
-import { enhancePrompt, pushHistory } from '../../shared/promptEngine';
+import DailyPanel from './components/DailyPanel';
+import {
+  getSettings, getScreen, listHistory, deleteHistory,
+  setWallpaper, generateImage, onGenerateProgress,
+  listDaily, setDailyWallpaper,
+} from './ui/ipcClient';
 import type {
-  AppSettings,
-  EnhancedPrompt,
-  GenerateMode,
-  GenerateProgress,
-  GenerateResult,
-  PlatformInfo,
-  PromptHistoryEntry,
-  ScreenInfo,
-  SessionContext,
-  WallpaperRecord,
-} from '../../shared/types';
-import { DEFAULT_SETTINGS } from '../../shared/types';
-import * as ipc from './ui/ipcClient';
+  AppSettings, GenerateMode, ImageAspectRatio,
+  PromptHistoryEntry, WallpaperRecord,
+  BingDailyItem, DailyTheme, DailyListResult, GenerateProgress,
+} from './types';
 
-/** 简单自增 id（用于编辑史条目） */
-let historyIdCounter = 0;
-function nextHistoryId(): string {
-  historyIdCounter += 1;
-  return `hist-${Date.now()}-${historyIdCounter}`;
+const DEFAULT_STYLE_ID = 'photography';
+const STYLE_PRESETS = [
+  { id: 'masterpiece', label: '名画风格', template: '古典油画构图，大师级笔触，博物馆收藏级光影，细腻的颜料质感与画布纹理', boosters: ['高细节', '8K 分辨率', '专业构图', '艺术光影', '质感丰富'] },
+  { id: 'photography', label: '摄影风格', template: '专业摄影作品，浅景深，自然光捕捉，胶片质感，色彩还原精准，杂志封面级画质', boosters: ['高细节', '8K 分辨率', '专业构图', '色彩准确', '光影自然'] },
+  { id: 'anime', label: '动漫风格', template: '日系动漫插画，赛璐璐上色，鲜明的轮廓线，柔和的光影过渡，新海诚风格', boosters: ['高细节', '8K 分辨率', '专业构图', '色彩鲜明', '线条清晰'] },
+  { id: 'watercolor', label: '水彩插画', template: '水彩画风格，颜料自然晕染，纸张纹理通透，柔和色调，手绘质感', boosters: ['高细节', '8K 分辨率', '专业构图', '色彩柔和', '纹理自然'] },
+  { id: 'pixel', label: '8-bit 像素', template: '复古 8-bit 像素艺术，经典游戏风格，色彩块面分明，像素边缘清晰，怀旧游戏画质', boosters: ['像素完美', '复古色调', '游戏风格', '色彩鲜明', '边缘清晰'] },
+  { id: 'cyberpunk', label: '赛博朋克', template: '赛博朋克风格，霓虹灯光，未来都市，高科技低生活，雨夜反光，机械义体', boosters: ['高细节', '8K 分辨率', '专业构图', '霓虹光影', '未来感'] },
+  { id: 'minimal', label: '极简艺术', template: '极简主义风格，大面积留白，几何构图，色彩克制，包豪斯美学，干净利落', boosters: ['高细节', '8K 分辨率', '专业构图', '色彩克制', '构图简洁'] },
+  { id: 'render3d', label: '3D 渲染', template: '3D 渲染艺术，Cinema 4D 风格，光线追踪，材质逼真，Octane 渲染，电影级画质', boosters: ['高细节', '8K 分辨率', '专业构图', '材质逼真', '光影真实'] },
+  { id: 'epic', label: '史诗自然', template: '史诗级自然风光，广角视野，壮丽山川，戏剧性光影，国家地理摄影风格', boosters: ['高细节', '8K 分辨率', '专业构图', '戏剧光影', '色彩壮阔'] },
+  { id: 'ink', label: '国风水墨', template: '中国传统水墨画，泼墨技法，留白意境，山水画卷，古典东方美学', boosters: ['高细节', '8K 分辨率', '专业构图', '墨色层次', '东方意境'] },
+];
+const STYLE_LABELS: Record<string, string> = {};
+STYLE_PRESETS.forEach((p) => { STYLE_LABELS[p.id] = p.label; });
+
+type TabKey = 'daily' | 'create' | 'history';
+
+interface DailyDataState {
+  bing: BingDailyItem[];
+  themes: DailyTheme[];
+  bingError: string | null;
 }
 
 export default function App() {
-  /* ---------------- 提示词面板状态 ---------------- */
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [activeTab, setActiveTab] = useState<TabKey>('daily');
+  const [dailyData, setDailyData] = useState<DailyDataState>({ bing: [], themes: [], bingError: null });
+  const [bingLoading, setBingLoading] = useState(false);
   const [raw, setRaw] = useState('');
-  const [styleId, setStyleId] = useState('photography');
-  const [enhanced, setEnhanced] = useState<EnhancedPrompt | null>(null);
+  const [styleId, setStyleId] = useState(DEFAULT_STYLE_ID);
   const [editingText, setEditingText] = useState('');
   const [promptHistory, setPromptHistory] = useState<PromptHistoryEntry[]>([]);
-
-  /* ---------------- 生成状态 ---------------- */
-  const [count, setCount] = useState(1);
+  const [aspectRatio, setAspectRatio] = useState<ImageAspectRatio>('16:9');
+  const [generateMode, setGenerateMode] = useState<GenerateMode>('text-to-image');
+  const [selectedRefIds, setSelectedRefIds] = useState<string[]>([]);
   const [generating, setGenerating] = useState(false);
-  const [batchItems, setBatchItems] = useState<ResultGridItem[]>([]);
+  const [count, setCount] = useState(1);
+  const [gridItems, setGridItems] = useState<ResultGridItem[]>([]);
   const [doneCount, setDoneCount] = useState(0);
   const [failedCount, setFailedCount] = useState(0);
-
-  /* ---------------- 参考图 / 会话上下文 ---------------- */
-  const [references, setReferences] = useState<WallpaperRecord[]>([]);
-  const [sessionContext, setSessionContext] = useState<SessionContext>({ keywords: [] });
-
-  /* ---------------- 历史 / 设置 ---------------- */
-  const [history, setHistory] = useState<WallpaperRecord[]>([]);
+  const [toast, setToast] = useState<{ type: 'error' | 'success' | 'info'; text: string } | null>(null);
+  const [historyRecords, setHistoryRecords] = useState<WallpaperRecord[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
-  /* ---------------- 环境信息 ---------------- */
-  const [platformInfo, setPlatformInfo] = useState<PlatformInfo | null>(null);
-  const [screenInfo, setScreenInfo] = useState<ScreenInfo | null>(null);
+  const showToast = useCallback((type: 'error' | 'success' | 'info', text: string) => {
+    setToast({ type, text });
+    setTimeout(() => setToast(null), 3500);
+  }, []);
 
-  /* ---------------- Toast ---------------- */
-  const [toast, setToast] = useState<{ id: number; text: string } | null>(null);
-  const toastTimer = useMemo(() => ({ current: null as ReturnType<typeof setTimeout> | null }), []);
-  const showToast = useCallback((text: string) => {
-    setToast({ id: Date.now(), text });
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 3500);
-  }, [toastTimer]);
+  const hasApiKey = !!settings?.apiKey;
 
-  /* ---------------- 模式 ---------------- */
-  const mode: GenerateMode = references.length > 0 ? 'image-to-image' : 'text-to-image';
+  // 初始化：读取设置 + 屏幕宽高比
+  useEffect(() => {
+    (async () => {
+      try {
+        const [settingsData, screenInfo] = await Promise.all([getSettings(), getScreen()]);
+        if (settingsData?.settings) setSettings(settingsData.settings);
+        if (screenInfo?.aspectRatio) setAspectRatio(screenInfo.aspectRatio);
+      } catch (err) {
+        console.error('init error', err);
+      }
+    })();
+  }, []);
 
-  /* ---------------- 挂载：加载设置/屏幕/平台/历史 + 订阅进度 ---------------- */
-  const refreshHistory = useCallback(async () => {
+  // 加载每日图片
+  const loadDaily = useCallback(async () => {
+    setBingLoading(true);
+    try {
+      const data: DailyListResult = await listDaily();
+      setDailyData({ bing: data.bing, themes: data.themes, bingError: data.bingError });
+    } catch (err) {
+      setDailyData({ bing: [], themes: [], bingError: '网络错误或服务不可用' });
+      showToast('error', '每日数据加载失败');
+    } finally {
+      setBingLoading(false);
+    }
+  }, [showToast]);
+
+  useEffect(() => { loadDaily(); }, [loadDaily]);
+
+  // 加载历史
+  const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
     try {
-      const payload = await ipc.listHistory();
-      setHistory(payload.records);
-    } catch {
-      // 主进程未实现时静默忽略
+      const data = await listHistory();
+      if (data?.records) setHistoryRecords(data.records);
+    } catch (err) {
+      console.error('loadHistory error', err);
     } finally {
       setHistoryLoading(false);
     }
   }, []);
 
+  useEffect(() => { loadHistory(); }, [loadHistory]);
+
+  // 订阅生成进度
   useEffect(() => {
-    void ipc.getSettings().then((p) => setSettings(p.settings)).catch(() => { /* 使用默认值 */ });
-    void ipc.getScreen().then(setScreenInfo).catch(() => { /* 忽略 */ });
-    void ipc.getPlatform().then(setPlatformInfo).catch(() => { /* 忽略 */ });
-    void refreshHistory();
-
-    const unsub = ipc.onGenerateProgress((progress: GenerateProgress) => {
-      setBatchItems((prev) => {
-        const next = [...prev];
-        const idx = progress.index;
-        if (idx >= 0 && idx < next.length) {
-          next[idx] = { ...next[idx], progress };
-        }
-        return next;
+    const unsub = onGenerateProgress((p: GenerateProgress) => {
+      setGridItems((prev) => {
+        const items = [...prev];
+        const slot = items[p.index];
+        if (slot) items[p.index] = { ...slot, progress: p };
+        return items;
       });
-      // 计数更新
-      if (progress.status === 'done') {
-        setDoneCount((c) => c + 1);
-      } else if (progress.status === 'failed') {
-        setFailedCount((c) => c + 1);
-      }
+      if (p.status === 'done') setDoneCount((c) => c + 1);
+      if (p.status === 'failed') setFailedCount((c) => c + 1);
     });
-
-    return () => {
-      unsub();
-    };
-  }, [refreshHistory]);
-
-  /* ---------------- 完善提示词 ---------------- */
-  const handleEnhance = useCallback(() => {
-    try {
-      const result = enhancePrompt(raw, { styleId, context: sessionContext });
-      setEnhanced(result);
-      setEditingText(result.enhanced);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : '完善提示词失败';
-      showToast(msg);
-    }
-  }, [raw, styleId, sessionContext, showToast]);
-
-  /* ---------------- 保存编辑 ---------------- */
-  const handleEditSave = useCallback(() => {
-    if (enhanced === null) return;
-    const entry: PromptHistoryEntry = {
-      id: nextHistoryId(),
-      text: editingText,
-      savedAt: new Date().toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
-    };
-    setPromptHistory((prev) => pushHistory(prev, entry));
-    setEnhanced({ ...enhanced, enhanced: editingText });
-  }, [enhanced, editingText]);
-
-  /* ---------------- 编辑史回填 ---------------- */
-  const handleHistoryPick = useCallback((entry: PromptHistoryEntry) => {
-    setEditingText(entry.text);
+    return unsub;
   }, []);
 
-  /* ---------------- 开始生成（串行） ---------------- */
+  // 完善提示词
+  const handleEnhance = useCallback(() => {
+    if (!raw.trim()) return;
+    try {
+      const preset = STYLE_PRESETS.find((s) => s.id === styleId) ?? STYLE_PRESETS[0];
+      const trimmed = raw.trim().slice(0, 200);
+      const enhanced = `${trimmed}，${preset.template}，${preset.boosters.join('，')}`;
+      setEditingText(enhanced);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '完善失败';
+      showToast('error', msg);
+    }
+  }, [raw, styleId, showToast]);
+
+  // 生成壁纸（串行）
   const handleGenerate = useCallback(async () => {
-    if (!settings.apiKey) {
-      showToast('尚未配置 API Key，请先在设置中填写');
+    if (!hasApiKey) {
+      showToast('error', '请先配置 API Key 后再生成');
       setSettingsOpen(true);
       return;
     }
-
-    const prompt = editingText || raw;
-    if (!prompt.trim()) {
-      showToast('请先输入描述或完善提示词');
+    if (!editingText.trim() && !raw.trim()) {
+      showToast('error', '请输入描述或先完善提示词');
       return;
     }
-
-    setGenerating(true);
+    const finalPrompt = editingText.trim() || raw.trim();
+    const total = count;
+    const items: ResultGridItem[] = Array.from({ length: total }, () => ({ record: null, progress: null, selected: false }));
+    setGridItems(items);
     setDoneCount(0);
     setFailedCount(0);
-
-    // 初始化占位槽位
-    const slots: ResultGridItem[] = Array.from({ length: count }, () => ({
-      record: null,
-      progress: { index: 0, total: count, status: 'pending', attempts: 0 },
-      selected: false,
-    }));
-    // 修正 index
-    slots.forEach((s, i) => {
-      if (s.progress) s.progress.index = i;
-    });
-    setBatchItems(slots);
-
-    const size = screenInfo?.aspectRatio ?? '16:9';
-
-    for (let i = 0; i < count; i++) {
-      try {
-        const result: GenerateResult = await ipc.generateImage({
-          prompt,
-          rawInput: raw,
-          styleId,
-          size,
-          mode,
-          references: references.map((r) => ({ recordId: r.id, filePath: r.filePath })),
+    setGenerating(true);
+    try {
+      for (let i = 0; i < total; i++) {
+        setGridItems((prev) => {
+          const next = [...prev];
+          next[i] = { ...next[i], progress: { index: i, total, status: 'requesting', attempts: 1 } };
+          return next;
         });
-
-        if (result.ok && result.localPath) {
-          // 构造 WallpaperRecord（主进程返回 localPath，这里用占位 record 展示）
-          const record: WallpaperRecord = {
-            id: `batch-${Date.now()}-${i}`,
-            fileName: result.localPath.split(/[/\\]/).pop() ?? `wallpaper-${i}.png`,
-            filePath: result.localPath,
-            prompt,
-            rawInput: raw,
-            styleId,
-            size,
-            mode,
-            fileSize: 0,
-            createdAt: new Date().toISOString(),
-          };
-          setBatchItems((prev) => {
+        const refs = selectedRefIds
+          .map((id) => historyRecords.find((r) => r.id === id))
+          .filter((r): r is WallpaperRecord => r !== undefined)
+          .map((r) => ({ recordId: r.id, filePath: r.filePath }));
+        const mode: GenerateMode = refs.length > 0 ? 'image-to-image' : 'text-to-image';
+        const res = await generateImage({ prompt: finalPrompt, rawInput: raw, styleId, size: aspectRatio, mode, references: refs });
+        if (res.ok && res.localPath) {
+          setGridItems((prev) => {
             const next = [...prev];
-            next[i] = { ...next[i], record };
-            return next;
-          });
-        } else {
-          // 失败：通过 progress 事件已更新状态，这里补 record=null
-          setBatchItems((prev) => {
-            const next = [...prev];
+            const parts = res.localPath!.split(/[/\\]/);
             next[i] = {
               ...next[i],
-              record: null,
-              progress: {
-                index: i,
-                total: count,
-                status: 'failed',
-                attempts: result.attempts,
-                message: result.error ?? '生成失败',
+              record: {
+                id: `gen-${Date.now()}-${i}`, fileName: parts.pop() || `${Date.now()}.png`,
+                filePath: res.localPath!, prompt: finalPrompt, rawInput: raw,
+                styleId, size: aspectRatio, mode, fileSize: 0,
+                createdAt: new Date().toISOString(),
               },
+              progress: { index: i, total, status: 'done', attempts: res.attempts },
             };
             return next;
           });
+          setDoneCount((c) => c + 1);
+        } else {
+          setGridItems((prev) => {
+            const next = [...prev];
+            next[i] = { ...next[i], progress: { index: i, total, status: 'failed', attempts: res.attempts, message: res.error } };
+            return next;
+          });
+          setFailedCount((c) => c + 1);
         }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : '生成异常';
-        setBatchItems((prev) => {
-          const next = [...prev];
-          next[i] = {
-            ...next[i],
-            record: null,
-            progress: {
-              index: i,
-              total: count,
-              status: 'failed',
-              attempts: 1,
-              message: msg,
-            },
-          };
-          return next;
-        });
       }
+      showToast('success', `完成 ${total} 张壁纸生成`);
+      loadHistory();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '生成失败';
+      showToast('error', msg);
+    } finally {
+      setGenerating(false);
     }
+  }, [hasApiKey, editingText, raw, count, styleId, aspectRatio, selectedRefIds, historyRecords, loadHistory, showToast]);
 
-    setGenerating(false);
-    // 更新会话上下文
-    setSessionContext({
-      keywords: enhanced?.keywords ?? [],
-      styleId,
-    });
-    // 刷新历史
-    void refreshHistory();
-  }, [settings.apiKey, editingText, raw, count, screenInfo, styleId, mode, references, enhanced, showToast, refreshHistory]);
+  const handleDeleteHistory = useCallback(async (ids: string[]) => {
+    try { await deleteHistory(ids); showToast('info', `已删除 ${ids.length} 条记录`); loadHistory(); }
+    catch (err: unknown) { showToast('error', err instanceof Error ? err.message : '删除失败'); }
+  }, [loadHistory, showToast]);
 
-  /* ---------------- 设为壁纸 ---------------- */
-  const handleSetWallpaper = useCallback(async (record: WallpaperRecord) => {
+  const handleSetWallpaperFromRecord = useCallback(async (record: WallpaperRecord) => {
     try {
-      const result = await ipc.setWallpaper({ filePath: record.filePath });
-      if (!result.ok) {
-        showToast(result.error ?? '设置壁纸失败');
-      } else {
-        showToast('壁纸设置成功');
-      }
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : '设置壁纸失败');
-    }
+      const res = await setWallpaper({ filePath: record.filePath });
+      if (res.ok) showToast('success', '壁纸已设置');
+      else showToast('error', res.error || '设置失败');
+    } catch (err: unknown) { showToast('error', err instanceof Error ? err.message : '设置失败'); }
   }, [showToast]);
 
-  /* ---------------- 历史操作 ---------------- */
-  const handleDeleteHistory = useCallback(async (ids: string[]) => {
-    try {
-      await ipc.deleteHistory(ids);
-      void refreshHistory();
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : '删除失败');
-    }
-  }, [refreshHistory, showToast]);
-
   const handleToggleReference = useCallback((record: WallpaperRecord) => {
-    setReferences((prev) => {
-      const exists = prev.some((r) => r.id === record.id);
-      return exists ? prev.filter((r) => r.id !== record.id) : [...prev, record];
-    });
+    setSelectedRefIds((prev) => prev.includes(record.id) ? prev.filter((id) => id !== record.id) : [...prev, record.id]);
+    setGenerateMode('image-to-image');
   }, []);
 
-  const handleClearReferences = useCallback(() => {
-    setReferences([]);
-  }, []);
+  const handleSetDailyWallpaper = useCallback(async (url: string, fileName: string) => {
+    try {
+      const res = await setDailyWallpaper({ url, fileName });
+      if (res.ok) showToast('success', '壁纸已设置');
+      else showToast('error', res.error || '设置失败');
+    } catch (err: unknown) { showToast('error', err instanceof Error ? err.message : '设置失败'); }
+  }, [showToast]);
 
-  /* ---------------- 设置保存 ---------------- */
-  const handleSaveSettings = useCallback(async (newSettings: AppSettings) => {
-    const result = await ipc.saveSettings({ settings: newSettings });
-    setSettings(result.settings);
-  }, []);
+  const handleGenerateTheme = useCallback(async (theme: DailyTheme) => {
+    if (!hasApiKey) { showToast('error', '请先配置 API Key'); setSettingsOpen(true); return; }
+    setRaw(theme.description);
+    setStyleId(DEFAULT_STYLE_ID);
+    setEditingText(theme.description);
+    setActiveTab('create');
+    showToast('info', `已切换到创作：${theme.name}`);
+  }, [hasApiKey, showToast]);
 
-  /* ---------------- 渲染 ---------------- */
-  const selectedIds = useMemo(() => references.map((r) => r.id), [references]);
+  const handleEditSave = useCallback(() => {
+    if (!editingText.trim()) return;
+    setPromptHistory((prev) => [
+      { id: `eh-${Date.now()}`, text: editingText, savedAt: new Date().toLocaleString('zh-CN') },
+      ...prev,
+    ].slice(0, 10));
+    showToast('success', '提示词已保存');
+  }, [editingText, showToast]);
+
+  const handleHistoryPick = useCallback((entry: PromptHistoryEntry) => { setEditingText(entry.text); }, []);
+
+  const handleClearRefs = useCallback(() => { setSelectedRefIds([]); setGenerateMode('text-to-image'); }, []);
+
+  // 渲染每日
+  const renderDaily = () => (
+    <DailyPanel
+      bing={dailyData.bing} themes={dailyData.themes}
+      bingError={dailyData.bingError} bingLoading={bingLoading}
+      onRetryBing={loadDaily} onSetDailyWallpaper={handleSetDailyWallpaper}
+      onGenerateTheme={handleGenerateTheme}
+    />
+  );
+
+  // 渲染创作
+  const renderCreate = () => (
+    <div className="create-page flex flex-col gap-5">
+      <PromptPanel
+        raw={raw} styleId={styleId}
+        enhanced={editingText
+          ? { raw, enhanced: editingText, styleId, styleLabel: STYLE_LABELS[styleId] || styleId, keywords: [], timestamp: new Date().toISOString() }
+          : null}
+        editingText={editingText} history={promptHistory}
+        onRawChange={setRaw} onStyleChange={setStyleId}
+        onEnhance={handleEnhance} onEditingChange={setEditingText}
+        onEditSave={handleEditSave} onHistoryPick={handleHistoryPick}
+      />
+      <GenerateBar
+        count={count} onCountChange={setCount} mode={generateMode}
+        onGenerate={handleGenerate} generating={generating}
+        hasReference={selectedRefIds.length > 0} onClearReferences={handleClearRefs}
+        batchSize={count} doneCount={doneCount} failedCount={failedCount}
+      />
+      <ResultGrid
+        items={gridItems}
+        onSetWallpaper={(id) => { const item = gridItems.find((i) => i.record?.id === id); if (item?.record) handleSetWallpaperFromRecord(item.record); }}
+        onToggleReference={handleToggleReference}
+      />
+    </div>
+  );
+
+  // 渲染历史
+  const renderHistory = () => (
+    <HistoryPanel
+      records={historyRecords} loading={historyLoading}
+      onRefresh={loadHistory} onDelete={handleDeleteHistory}
+      onSetWallpaper={handleSetWallpaperFromRecord}
+      onToggleReference={handleToggleReference}
+      selectedIds={selectedRefIds}
+    />
+  );
 
   return (
     <div className="app">
-      {/* 顶栏 */}
-      <header className="topbar">
-        <div className="brand">
-          <span className="brand-mark">✦</span>
-          <h1 className="brand-name">Aurora Wallpaper · AI 壁纸工坊</h1>
+      {/* 侧边栏 */}
+      <aside className="app__sidebar sidebar">
+        <div className="sidebar__brand">
+          <div className="sidebar__logo">A</div>
+          <span className="sidebar__name">极光壁纸</span>
         </div>
-        <nav className="topbar-actions">
-          <button type="button" className="btn ghost" onClick={() => void refreshHistory()}>
-            历史图库
+        <nav className="sidebar__nav">
+          <button className={activeTab === 'daily' ? 'sidebar__nav-item sidebar__nav-item--active' : 'sidebar__nav-item'} onClick={() => setActiveTab('daily')}>
+            <span className="sidebar__nav-icon">🌅</span><span>每日图片</span>
           </button>
-          <button type="button" className="btn ghost" onClick={() => setSettingsOpen(true)}>
-            设置
+          <button className={activeTab === 'create' ? 'sidebar__nav-item sidebar__nav-item--active' : 'sidebar__nav-item'} onClick={() => setActiveTab('create')}>
+            <span className="sidebar__nav-icon">✨</span><span>创作</span>
+          </button>
+          <button className={activeTab === 'history' ? 'sidebar__nav-item sidebar__nav-item--active' : 'sidebar__nav-item'} onClick={() => setActiveTab('history')}>
+            <span className="sidebar__nav-icon">🖼️</span><span>历史</span>
           </button>
         </nav>
-      </header>
-
-      {/* 主布局 */}
-      <main className="layout">
-        <div className="main-col">
-          <PromptPanel
-            raw={raw}
-            styleId={styleId}
-            enhanced={enhanced}
-            editingText={editingText}
-            history={promptHistory}
-            onRawChange={setRaw}
-            onStyleChange={setStyleId}
-            onEnhance={handleEnhance}
-            onEditingChange={setEditingText}
-            onEditSave={handleEditSave}
-            onHistoryPick={handleHistoryPick}
-          />
-
-          <GenerateBar
-            count={count}
-            onCountChange={setCount}
-            mode={mode}
-            onGenerate={handleGenerate}
-            generating={generating}
-            hasReference={references.length > 0}
-            onClearReferences={handleClearReferences}
-            batchSize={count}
-            doneCount={doneCount}
-            failedCount={failedCount}
-          />
-
-          <ResultGrid
-            items={batchItems}
-            onSetWallpaper={(id) => {
-              const record = batchItems.find((it) => it.record?.id === id)?.record;
-              if (record) void handleSetWallpaper(record);
-            }}
-            onToggleReference={handleToggleReference}
-          />
+        <div className="sidebar__footer">
+          <button className="sidebar__settings-btn" onClick={() => setSettingsOpen(true)}>
+            <span className="sidebar__nav-icon">⚙️</span><span>设置</span>
+            {!hasApiKey && <span className="sidebar__settings-dot" />}
+          </button>
         </div>
+      </aside>
 
-        <HistoryPanel
-          records={history}
-          loading={historyLoading}
-          onRefresh={() => void refreshHistory()}
-          onDelete={(ids) => void handleDeleteHistory(ids)}
-          onSetWallpaper={(record) => void handleSetWallpaper(record)}
-          onToggleReference={handleToggleReference}
-          selectedIds={selectedIds}
-        />
-      </main>
-
-      {/* 底部状态栏 */}
-      <footer className="statusbar">
-        <span>
-          {platformInfo
-            ? `${platformInfo.platform}${platformInfo.supported ? '（已支持）' : '（未支持）'}`
-            : '检测中…'}
-        </span>
-        <span>
-          {screenInfo
-            ? `${screenInfo.width} × ${screenInfo.height}（${screenInfo.aspectRatio}）`
-            : '检测中…'}
-        </span>
-        <span>深色主题 · 全中文界面</span>
-      </footer>
+      {/* 主区 */}
+      <div className="app__main">
+        <header className="app__header">
+          <h1 className="header__title">
+            {activeTab === 'daily' && '每日图片'}
+            {activeTab === 'create' && 'AI 创作'}
+            {activeTab === 'history' && '历史图库'}
+          </h1>
+          <div className="header__actions">
+            {!hasApiKey && (
+              <div className="banner banner--warning" style={{ padding: '6px 12px' }}>
+                <span className="banner__icon">⚠️</span>
+                <span className="banner__content">未配置 API Key</span>
+              </div>
+            )}
+          </div>
+        </header>
+        <main className="app__content">
+          {activeTab === 'daily' && renderDaily()}
+          {activeTab === 'create' && renderCreate()}
+          {activeTab === 'history' && renderHistory()}
+        </main>
+      </div>
 
       {/* 设置弹窗 */}
-      <SettingsDialog
-        open={settingsOpen}
-        settings={settings}
-        onSave={handleSaveSettings}
-        onClose={() => setSettingsOpen(false)}
-      />
+      {settings && (
+        <SettingsDialog
+          open={settingsOpen} settings={settings}
+          onSave={async (s: AppSettings) => { setSettings(s); showToast('success', '设置已保存'); }}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
 
       {/* Toast */}
-      {toast && <div className="toast">{toast.text}</div>}
+      {toast && (
+        <div className={`toast toast--${toast.type}`}>
+          <span>{toast.text}</span>
+        </div>
+      )}
     </div>
   );
 }

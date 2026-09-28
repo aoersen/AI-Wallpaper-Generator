@@ -8,6 +8,7 @@
  */
 
 import type {
+  DailyListResult,
   DeleteHistoryRequest,
   DeleteHistoryResult,
   DownloadWallpaperRequest,
@@ -20,6 +21,7 @@ import type {
   SaveSettingsRequest,
   SaveSettingsResult,
   ScreenInfo,
+  SetDailyWallpaperRequest,
   SetWallpaperRequest,
   SetWallpaperResult,
   SettingsPayload,
@@ -49,6 +51,11 @@ export const IPC = {
   /** 读取本地壁纸文件为 base64 data URL（绕过 file:// CSP 限制） */
   WALLPAPER_READ_DATA_URL: 'wallpaper:read-data-url',
 
+  /** 获取每日图片数据（Bing 壁纸 + 今日 AI 主题） */
+  DAILY_LIST: 'daily:list',
+  /** 下载 Bing 每日壁纸并设置桌面壁纸 */
+  DAILY_SET_WALLPAPER: 'daily:set-wallpaper',
+
   /** 获取历史壁纸列表 */
   HISTORY_LIST: 'history:list',
   /** 删除指定历史记录（含文件） */
@@ -74,6 +81,8 @@ export type IpcRequestMap = {
   [IPC.WALLPAPER_DOWNLOAD]: DownloadWallpaperRequest;
   [IPC.WALLPAPER_SET]: SetWallpaperRequest;
   [IPC.WALLPAPER_READ_DATA_URL]: { filePath: string };
+  [IPC.DAILY_LIST]: void;
+  [IPC.DAILY_SET_WALLPAPER]: SetDailyWallpaperRequest;
   [IPC.HISTORY_LIST]: void;
   [IPC.HISTORY_DELETE]: DeleteHistoryRequest;
   [IPC.ENV_PLATFORM]: void;
@@ -88,6 +97,8 @@ export type IpcResponseMap = {
   [IPC.WALLPAPER_DOWNLOAD]: DownloadWallpaperResult;
   [IPC.WALLPAPER_SET]: SetWallpaperResult;
   [IPC.WALLPAPER_READ_DATA_URL]: { dataUrl: string };
+  [IPC.DAILY_LIST]: DailyListResult;
+  [IPC.DAILY_SET_WALLPAPER]: SetWallpaperResult;
   [IPC.HISTORY_LIST]: HistoryPayload;
   [IPC.HISTORY_DELETE]: DeleteHistoryResult;
   [IPC.ENV_PLATFORM]: PlatformInfo;
