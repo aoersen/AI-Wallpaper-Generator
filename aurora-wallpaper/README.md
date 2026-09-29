@@ -113,22 +113,22 @@ aurora-wallpaper/
 │   ├── main/            # Electron 主进程（编译产物 → dist/main/）
 │   │   ├── services/    # 主进程业务服务（qwenClient / wallpaperStore / dailyService 等）
 │   │   └── ipc/         # IPC handler 注册（按域拆分：settings / generate / wallpaper / daily / history / env）
-│   ├── preload/         # preload 安全 IPC 桥（编译产物 → dist/preload/）
+│   ├── preload/         # preload 安全 IPC 桥（esbuild 打包为单文件 → dist/preload/）
 │   ├── renderer/        # 前端 React 应用（Vite 入口，含 index.html）
 │   │   └── src/         # 渲染进程源码（main.tsx、App.tsx、components/、styles.css）
 │   └── shared/          # 主进程/渲染进程共享类型与 IPC 通道常量
 ├── tests/               # 测试用例（vitest）
 ├── build/               # 应用图标（icon.png / icon.ico）
-├── scripts/             # 构建辅助脚本（make-icons.mjs、build-pq-client.mjs）
+├── scripts/             # 构建辅助脚本（make-icons.mjs、build-pq-client.mjs、build-preload.mjs）
 ├── tools/pq-client/     # Go 编写的 HTTP 助手源码与产物（bin/<平台>-<架构>/）
-├── dist/                # 主进程 + preload 编译产物（tsc）
+├── dist/                # 主进程编译产物（tsc）+ preload 单文件 bundle（esbuild）
 ├── dist-renderer/       # 前端构建产物（vite build）
 ├── release/             # electron-builder 打包产物
 ├── package.json
 ├── electron-builder.yml # 打包配置（win nsis x64 + mac dmg arm64/x64）
 ├── tsconfig.json        # 类型检查配置（覆盖 src + tests）
 ├── tsconfig.main.json   # 主进程编译配置
-├── tsconfig.preload.json# preload 编译配置
+├── tsconfig.preload.json# preload 类型检查配置
 ├── vite.config.ts       # Vite 构建配置（root: src/renderer）
 └── vitest.config.ts     # Vitest 配置
 ```

@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **高危修复接线**：7 项安全相关修复（详见 README）
 - **sandbox**：启用 `sandbox: true`，preload 仅使用 contextBridge/ipcRenderer
+- **白屏修复**：`sandbox: true` 下 tsc 直出的 preload 残留 `require('../shared/ipc')` 相对加载，沙箱 preload 不支持导致 `window.aurora` 注入失败、界面白屏；preload 现由 esbuild 打包为单文件 bundle（`electron` 保持 external），并在入口增加 preload 注入失败时的可见错误提示
 - **dev 图片显示**：开发模式下图片正确显示
 
 ### Changed
