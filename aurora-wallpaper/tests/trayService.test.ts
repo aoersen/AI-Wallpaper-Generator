@@ -6,7 +6,24 @@
  * Other deps use standard vi.fn() mocks.
  */
 import { describe, it, expect, vi } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
 import { createTrayService } from '../src/main/services/trayService';
+
+const projectRoot = path.resolve(path.dirname(__filename), '..');
+
+/** 复制脚本复制的托盘资源 */
+describe('dist/build tray resources', () => {
+  it('dist/build/tray.ico exists after build:main', () => {
+    const p = path.resolve(projectRoot, 'dist/build/tray.ico');
+    expect(fs.existsSync(p)).toBe(true);
+  });
+
+  it('dist/build/trayTemplate.png exists after build:main', () => {
+    const p = path.resolve(projectRoot, 'dist/build/trayTemplate.png');
+    expect(fs.existsSync(p)).toBe(true);
+  });
+});
 
 /** Helper to build a deps object with pass-through menu template */
 function makeDeps(overrides: Record<string, any> = {}) {
@@ -26,7 +43,6 @@ function makeDeps(overrides: Record<string, any> = {}) {
     getMainWindow: vi.fn(() => null),
     onRotateNow: vi.fn(),
     onQuit: vi.fn(),
-    notify: vi.fn(),
     ...overrides,
   };
 }

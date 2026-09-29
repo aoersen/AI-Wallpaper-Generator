@@ -26,8 +26,6 @@ export interface TrayDeps {
   onRotateNow: () => void;
   /** 「退出」回调 */
   onQuit: () => void;
-  /** 通知 API（可选） */
-  notify?: (title: string, body: string) => boolean;
   /** 构建产物根目录（生产 = __dirname，测试可注入） */
   buildDir?: string;
 }

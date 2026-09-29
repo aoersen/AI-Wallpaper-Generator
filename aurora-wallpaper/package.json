@@ -1,7 +1,7 @@
 {
   "name": "aurora-wallpaper",
   "productName": "Aurora Wallpaper",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Aurora Wallpaper · AI 壁纸工坊 —— 跨平台 AI 壁纸桌面应用",
   "private": true,
   "main": "dist/main/index.js",
@@ -12,7 +12,7 @@
     "dev:vite": "vite",
     "dev:electron": "wait-on tcp:5173 && npm run build:main && npm run build:preload && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .",
     "build": "npm run build:main && npm run build:preload && npm run build:renderer && npm run build:pq-client",
-    "build:main": "tsc -p tsconfig.main.json",
+    "build:main": "tsc -p tsconfig.main.json && node scripts/copy-tray-assets.mjs",
     "build:preload": "tsc -p tsconfig.preload.json",
     "build:renderer": "cross-env NODE_ENV=production vite build",
     "build:pq-client": "node scripts/build-pq-client.mjs",

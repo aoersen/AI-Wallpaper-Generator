@@ -15,7 +15,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "types": ["node", "vite/client"]
+    "types": ["node", "vite/client", "vitest/globals"]
   },
   "include": ["src/main/**/*.ts", "src/preload/**/*.ts", "src/renderer/**/*.ts", "src/renderer/**/*.tsx", "src/shared/**/*.ts", "tests/**/*.ts", "vite.config.ts", "vitest.config.ts"]
 }

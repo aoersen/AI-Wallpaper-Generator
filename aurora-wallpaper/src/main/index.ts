@@ -34,6 +34,8 @@ let isQuitting = false;
 let mainWindow: BrowserWindow | null = null;
 /** 托盘服务引用 */
 let trayService: { destroy(): void } | null = null;
+/** 首次隐藏到托盘通知是否已发送（保证仅弹一次） */
+let trayTipShown = false;
 
 /** 创建主窗口 */
 function createWindow(): void {
@@ -69,6 +71,16 @@ function createWindow(): void {
     if (!isQuitting) {
       event.preventDefault();
       mainWindow?.hide();
+      // 首次隐藏到托盘时弹一次通知
+      if (!trayTipShown) {
+        trayTipShown = true;
+        if (Notification.isSupported()) {
+          new Notification({
+            title: 'Aurora Wallpaper 仍在后台运行',
+            body: '定时轮换继续，右键托盘图标恢复窗口',
+          }).show();
+        }
+      }
     }
   });
 
@@ -163,31 +175,10 @@ if (!app.requestSingleInstanceLock()) {
         isQuitting = true;
         app.quit();
       },
-      notify: (title: string, body: string) => {
-        if (Notification.isSupported()) {
-          new Notification({ title, body }).show();
-          return true;
-        }
-        return false;
-      },
       buildDir: path.join(__dirname, '..', 'build'),
     });
 
     createWindow();
-
-    // 首次隐藏到托盘通知
-    app.on('browser-window-blur', () => {
-      // 关窗后托盘图标出现；正式隐藏由 close 事件控制
-      // 此处只负责「首次」通知
-      if (mainWindow && !mainWindow.isVisible()) {
-        if (Notification.isSupported()) {
-          new Notification({
-            title: 'Aurora Wallpaper 仍在后台运行',
-            body: '定时轮换继续，右键托盘图标恢复窗口',
-          }).show();
-        }
-      }
-    });
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
