@@ -9,6 +9,7 @@
  * - 不依赖 electron，所有副作用通过 WallpaperSetterDeps 注入 → vitest 可测
  * - 路径转义：win32 单引号内单引号翻倍；darwin 双引号内双引号转义
  * - 失败时 Error message 含平台、命令、退出码、stderr（截断 500 字符）
+ * - Windows: PowerShell 脚本内 try/catch + 显式 exit 1，主进程只信任退出码
  */
 
 import { execFile as nodeExecFile } from 'node:child_process';
@@ -75,36 +76,34 @@ export async function setWallpaper(filePath: string, deps: WallpaperSetterDeps =
 
   if (platform === 'win32') {
     // PowerShell 脚本：通过 P/Invoke 调用 user32.dll::SystemParametersInfo
+    // 脚本内 try/catch + 显式 exit 1，主进程只信任退出码
     const script = [
-      'Add-Type -TypeDefinition @"',
+      'try {',
+      '  Add-Type -TypeDefinition @"',
       'using System.Runtime.InteropServices;',
       'public class Win32 {',
       '  [DllImport("user32.dll", CharSet=CharSet.Auto)]',
       '  public static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);',
       '}',
       '"@',
-      `$result = [Win32]::SystemParametersInfo(${SPI_SETDESKWALLPAPER}, 0, '${escaped}', ${SPIF_WIN_PARAM})`,
-      'if ($result -eq 0) {',
-      '  Write-Error "SystemParametersInfo returned 0 (failure)"',
+      `  $result = [Win32]::SystemParametersInfo(${SPI_SETDESKWALLPAPER}, 0, '${escaped}', ${SPIF_WIN_PARAM})`,
+      '  if ($result -eq 0) {',
+      '    Write-Error "SystemParametersInfo returned 0 (failure)"',
+      '    exit 1',
+      '  }',
+      '  exit 0',
+      '} catch {',
+      '  Write-Error $_',
       '  exit 1',
       '}',
-      'exit 0',
     ].join('\n');
 
     const args = ['-NoProfile', '-NonInteractive', '-Command', script];
-    const { stderr } = await execFile('powershell.exe', args);
+    await execFile('powershell.exe', args);
 
-    // PowerShell 可能写 stderr 警告（如执行策略），仅当 exitCode 非 0 时判定失败
-    // 但 execFileAsync 在 exitCode 非 0 时会 reject，所以这里只需检查 stderr 是否异常
-    // 实际上 promisify(execFile) 返回 {stdout, stderr}，不抛错；我们通过 stderr 判断
-    // 严格模式：stderr 含 Error/Warning 视为失败（简化：stderr 非空即失败）
-    // 权衡：PowerShell 写 stderr 警告不罕见，但 SystemParametersInfo 成功时不应写 stderr
-    // 这里采用：stderr 非空 → 失败（与任务要求一致）
-    if (stderr && stderr.trim()) {
-      throw new Error(
-        `设置壁纸失败：[win32] powershell.exe SystemParametersInfo 执行异常，stderr: ${truncate(stderr.trim())}`
-      );
-    }
+    // 主进程只信任退出码，不再检查 stderr 是否非空
+    // PowerShell 执行策略警告会写 stderr，但脚本内 try/catch 已确保失败时 exit 1
+    // execFileAsync 在 exitCode 非 0 时会 reject，因此能执行到这里即代表成功
     return;
   }
 
@@ -114,7 +113,26 @@ export async function setWallpaper(filePath: string, deps: WallpaperSetterDeps =
     // 这里选 System Events，兼容性更好（多桌面场景）
     const script = `tell application "System Events" to tell every desktop to set picture to POSIX file "${escaped}"`;
     const args = ['-e', script];
-    const { stderr } = await execFile('osascript', args);
+
+    let stderr = '';
+    try {
+      const result = await execFile('osascript', args);
+      stderr = result.stderr;
+    } catch (err: any) {
+      // osascript 退出码非 0，execFileAsync 会 reject
+      stderr = err?.stderr ?? err?.message ?? '';
+
+      // 检查是否为自动化权限错误（-1743 / errAEEventNotPermitted）
+      if (/-1743|errAEEventNotPermitted/.test(stderr)) {
+        throw new Error(
+          `设置壁纸失败：缺少自动化权限。请前往「系统设置 → 隐私与安全性 → 自动化」，打开 Aurora Wallpaper 的开关；若列表里没有，终端运行 tccutil reset AppleEvents com.aurora.wallpaper 重置后再试。原始错误: ${truncate(stderr.trim())}`
+        );
+      }
+
+      throw new Error(
+        `设置壁纸失败：[darwin] osascript 执行异常，stderr: ${truncate(stderr.trim())}`
+      );
+    }
 
     if (stderr && stderr.trim()) {
       throw new Error(

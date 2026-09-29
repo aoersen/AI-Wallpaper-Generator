@@ -16,11 +16,15 @@ import type {
   GenerateResult,
   HistoryPayload,
   PlatformInfo,
+  ReadDataUrlResult,
+  RotationSettings,
   SaveSettingsResult,
   ScreenInfo,
   SetDailyWallpaperRequest,
   SetWallpaperResult,
   SettingsPayload,
+  ToggleFavoriteRequest,
+  ToggleFavoriteResult,
 } from '../shared/types';
 import type { DownloadWallpaperRequest, GenerateRequest, SaveSettingsRequest, SetWallpaperRequest } from '../shared/types';
 
@@ -41,7 +45,7 @@ export interface AuroraApi {
   downloadWallpaper(req: DownloadWallpaperRequest): Promise<DownloadWallpaperResult>;
   setWallpaper(req: SetWallpaperRequest): Promise<SetWallpaperResult>;
   /** 读取本地壁纸文件为 base64 data URL（dev 模式绕过 file:// CSP 限制） */
-  readDataUrl(filePath: string): Promise<string>;
+  readDataUrl(filePath: string): Promise<ReadDataUrlResult>;
 
   /* 每日图片（Bing 每日壁纸 + 今日 AI 主题） */
   /** 拉取每日图片数据：Bing 近 8 天壁纸 + 今日 6 个 AI 主题（确定性轮换） */
@@ -52,10 +56,23 @@ export interface AuroraApi {
   /* 历史 */
   listHistory(): Promise<HistoryPayload>;
   deleteHistory(ids: string[]): Promise<DeleteHistoryResult>;
+  /** 切换收藏状态 */
+  toggleFavorite(req: ToggleFavoriteRequest): Promise<ToggleFavoriteResult>;
 
   /* 平台与屏幕 */
   getPlatform(): Promise<PlatformInfo>;
   getScreen(): Promise<ScreenInfo>;
+
+  /** 打开日志目录（userData/logs） */
+  openLogDir(): Promise<void>;
+
+  /* 壁纸轮换 */
+  /** 读取当前轮换设置 */
+  getRotationSettings(): Promise<RotationSettings>;
+  /** 保存轮换设置 */
+  saveRotationSettings(rotation: RotationSettings): Promise<RotationSettings>;
+  /** 手动触发一次轮换 */
+  rotateNow(): Promise<boolean>;
 }
 
 const api: AuroraApi = {
@@ -74,16 +91,23 @@ const api: AuroraApi = {
 
   downloadWallpaper: (req) => ipcRenderer.invoke(IPC.WALLPAPER_DOWNLOAD, req) as Promise<DownloadWallpaperResult>,
   setWallpaper: (req) => ipcRenderer.invoke(IPC.WALLPAPER_SET, req) as Promise<SetWallpaperResult>,
-  readDataUrl: (filePath) => ipcRenderer.invoke(IPC.WALLPAPER_READ_DATA_URL, { filePath }) as Promise<string>,
+  readDataUrl: (filePath) => ipcRenderer.invoke(IPC.WALLPAPER_READ_DATA_URL, { filePath }) as Promise<ReadDataUrlResult>,
 
   listDaily: () => ipcRenderer.invoke(IPC.DAILY_LIST) as Promise<DailyListResult>,
   setDailyWallpaper: (req) => ipcRenderer.invoke(IPC.DAILY_SET_WALLPAPER, req) as Promise<SetWallpaperResult>,
 
   listHistory: () => ipcRenderer.invoke(IPC.HISTORY_LIST) as Promise<HistoryPayload>,
   deleteHistory: (ids) => ipcRenderer.invoke(IPC.HISTORY_DELETE, { ids }) as Promise<DeleteHistoryResult>,
+  toggleFavorite: (req) => ipcRenderer.invoke(IPC.HISTORY_TOGGLE_FAVORITE, req) as Promise<ToggleFavoriteResult>,
 
   getPlatform: () => ipcRenderer.invoke(IPC.ENV_PLATFORM) as Promise<PlatformInfo>,
   getScreen: () => ipcRenderer.invoke(IPC.ENV_SCREEN) as Promise<ScreenInfo>,
+
+  openLogDir: () => ipcRenderer.invoke(IPC.ENV_OPEN_LOG_DIR) as Promise<void>,
+
+  getRotationSettings: () => ipcRenderer.invoke(IPC.ROTATION_GET) as Promise<RotationSettings>,
+  saveRotationSettings: (rotation) => ipcRenderer.invoke(IPC.ROTATION_SAVE, rotation) as Promise<RotationSettings>,
+  rotateNow: () => ipcRenderer.invoke(IPC.ROTATION_ROTATE_NOW) as Promise<boolean>,
 };
 
 contextBridge.exposeInMainWorld('aurora', api);

@@ -1,5 +1,6 @@
 // 纯 Node 脚本（无依赖）：生成 build/icon.png（512x512 青紫渐变 + 白色圆环）
-// 与 build/icon.ico（ICO 容器内嵌 256x256 PNG）。
+// 与 build/icon.ico（ICO 容器内嵌 256x256 PNG）
+// 与 build/icon.icns（ICNS 容器内嵌 128/256/512/1024 PNG，用于 macOS）。
 // 运行：node scripts/make-icons.mjs
 import { deflateSync } from 'node:zlib';
 import { writeFileSync, mkdirSync } from 'node:fs';
@@ -103,5 +104,29 @@ entry.writeUInt32LE(22, 12);        // image offset (6 + 16)
 const ico = Buffer.concat([header, entry, png256]);
 writeFileSync(join(buildDir, 'icon.ico'), ico);
 
+// ---------- 写 build/icon.icns（ICNS 容器内嵌 128/256/512/1024 PNG） ----------
+function makeIcns() {
+  const sizes = [128, 256, 512, 1024];
+  const types = { 128: 'ic07', 256: 'ic08', 512: 'ic09', 1024: 'ic10' };
+  const elements = [];
+  let totalLen = 8; // header
+  for (const s of sizes) {
+    const png = makePng(s);
+    const type = Buffer.from(types[s], 'ascii');
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(8 + png.length, 0);
+    elements.push(Buffer.concat([type, len, png]));
+    totalLen += 8 + png.length;
+  }
+  const header = Buffer.alloc(8);
+  header.write('icns', 0, 'ascii');
+  header.writeUInt32BE(totalLen, 4);
+  return Buffer.concat([header, ...elements]);
+}
+
+const icns = makeIcns();
+writeFileSync(join(buildDir, 'icon.icns'), icns);
+
 console.log(`✓ build/icon.png  (${png512.length} bytes)`);
 console.log(`✓ build/icon.ico  (${ico.length} bytes)`);
+console.log(`✓ build/icon.icns (${icns.length} bytes)`);

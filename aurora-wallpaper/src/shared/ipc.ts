@@ -18,6 +18,8 @@ import type {
   GenerateResult,
   HistoryPayload,
   PlatformInfo,
+  ReadDataUrlResult,
+  RotationSettings,
   SaveSettingsRequest,
   SaveSettingsResult,
   ScreenInfo,
@@ -25,6 +27,8 @@ import type {
   SetWallpaperRequest,
   SetWallpaperResult,
   SettingsPayload,
+  ToggleFavoriteRequest,
+  ToggleFavoriteResult,
 } from './types';
 
 /* ------------------------------------------------------------------ */
@@ -62,11 +66,22 @@ export const IPC = {
   HISTORY_LIST: 'history:list',
   /** 删除指定历史记录（含文件） */
   HISTORY_DELETE: 'history:delete',
+  /** 切换收藏状态 */
+  HISTORY_TOGGLE_FAVORITE: 'history:toggle-favorite',
 
   /** 平台信息（win32/darwin/linux 及是否支持） */
   ENV_PLATFORM: 'env:platform',
   /** 主屏信息（尺寸、缩放、宽高比字符串） */
   ENV_SCREEN: 'env:screen',
+  /** 打开日志目录（userData/logs） */
+  ENV_OPEN_LOG_DIR: 'env:open-log-dir',
+
+  /** 读取壁纸轮换设置 */
+  ROTATION_GET: 'rotation:get',
+  /** 保存壁纸轮换设置 */
+  ROTATION_SAVE: 'rotation:save',
+  /** 手动触发一次轮换 */
+  ROTATION_ROTATE_NOW: 'rotation:rotate-now',
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];
@@ -88,8 +103,13 @@ export type IpcRequestMap = {
   [IPC.DAILY_SET_WALLPAPER]: SetDailyWallpaperRequest;
   [IPC.HISTORY_LIST]: void;
   [IPC.HISTORY_DELETE]: DeleteHistoryRequest;
+  [IPC.HISTORY_TOGGLE_FAVORITE]: ToggleFavoriteRequest;
   [IPC.ENV_PLATFORM]: void;
   [IPC.ENV_SCREEN]: void;
+  [IPC.ENV_OPEN_LOG_DIR]: void;
+  [IPC.ROTATION_GET]: void;
+  [IPC.ROTATION_SAVE]: RotationSettings;
+  [IPC.ROTATION_ROTATE_NOW]: void;
 };
 
 /** invoke 型通道的响应 */
@@ -100,13 +120,18 @@ export type IpcResponseMap = {
   [IPC.GENERATE_CANCEL]: void;
   [IPC.WALLPAPER_DOWNLOAD]: DownloadWallpaperResult;
   [IPC.WALLPAPER_SET]: SetWallpaperResult;
-  [IPC.WALLPAPER_READ_DATA_URL]: string;
+  [IPC.WALLPAPER_READ_DATA_URL]: ReadDataUrlResult;
   [IPC.DAILY_LIST]: DailyListResult;
   [IPC.DAILY_SET_WALLPAPER]: SetWallpaperResult;
   [IPC.HISTORY_LIST]: HistoryPayload;
   [IPC.HISTORY_DELETE]: DeleteHistoryResult;
+  [IPC.HISTORY_TOGGLE_FAVORITE]: ToggleFavoriteResult;
   [IPC.ENV_PLATFORM]: PlatformInfo;
   [IPC.ENV_SCREEN]: ScreenInfo;
+  [IPC.ENV_OPEN_LOG_DIR]: void;
+  [IPC.ROTATION_GET]: RotationSettings;
+  [IPC.ROTATION_SAVE]: RotationSettings;
+  [IPC.ROTATION_ROTATE_NOW]: void;
 };
 
 /** 事件推送型通道的负载（主进程 → 渲染进程） */

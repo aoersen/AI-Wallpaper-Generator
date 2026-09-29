@@ -5,21 +5,29 @@
  * verify labels and invoke the real click handlers that createTrayService constructs.
  * Other deps use standard vi.fn() mocks.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeAll } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import { execSync } from 'node:child_process';
 import { createTrayService } from '../src/main/services/trayService';
 
 const projectRoot = path.resolve(path.dirname(__filename), '..');
 
+beforeAll(() => {
+  // Ensure tray icon assets exist under dist/build/ before any test runs.
+  // dist/ is git-ignored and won't exist in a fresh checkout — this hook
+  // makes `npm test` self-sufficient on CI (build-win.yml / build-mac.yml).
+  execSync('npm run build:assets', { cwd: projectRoot, stdio: 'inherit' });
+});
+
 /** 复制脚本复制的托盘资源 */
 describe('dist/build tray resources', () => {
-  it('dist/build/tray.ico exists after build:main', () => {
+  it('dist/build/tray.ico exists after build:assets', () => {
     const p = path.resolve(projectRoot, 'dist/build/tray.ico');
     expect(fs.existsSync(p)).toBe(true);
   });
 
-  it('dist/build/trayTemplate.png exists after build:main', () => {
+  it('dist/build/trayTemplate.png exists after build:assets', () => {
     const p = path.resolve(projectRoot, 'dist/build/trayTemplate.png');
     expect(fs.existsSync(p)).toBe(true);
   });
@@ -43,6 +51,7 @@ function makeDeps(overrides: Record<string, any> = {}) {
     getMainWindow: vi.fn(() => null),
     onRotateNow: vi.fn(),
     onQuit: vi.fn(),
+    notify: vi.fn(),
     ...overrides,
   };
 }
@@ -147,5 +156,51 @@ describe('createTrayService', () => {
     createTrayService(deps as any);
     const trayInstance = (deps.Tray as any).mock.results[0].value;
     expect(trayInstance.setContextMenu).toHaveBeenCalledWith(expect.any(Array));
+  });
+
+  it('notifyBackgroundOnce() 连续调用 3 次 → deps.notify 只被调用 1 次，且参数为指定文案', () => {
+    const notifyMock = vi.fn();
+    const deps = makeDeps({ notify: notifyMock });
+    const service = createTrayService(deps as any);
+
+    service.notifyBackgroundOnce();
+    service.notifyBackgroundOnce();
+    service.notifyBackgroundOnce();
+
+    expect(notifyMock).toHaveBeenCalledTimes(1);
+    expect(notifyMock).toHaveBeenCalledWith(
+      'Aurora Wallpaper 仍在后台运行',
+      '定时轮换继续，右键托盘图标恢复窗口',
+    );
+  });
+
+  it('notifyBackgroundOnce() 首次调用触发通知，第二次调用不再触发', () => {
+    const notifyMock = vi.fn();
+    const deps = makeDeps({ notify: notifyMock });
+    const service = createTrayService(deps as any);
+
+    service.notifyBackgroundOnce();
+    expect(notifyMock).toHaveBeenCalledTimes(1);
+
+    service.notifyBackgroundOnce();
+    expect(notifyMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolveIcons 路径落在 dist/build/ 下（win32 用 tray.ico）', () => {
+    const deps = makeDeps({ platform: 'win32', buildDir: path.resolve(projectRoot, 'dist', 'build') });
+    createTrayService(deps as any);
+
+    expect(deps.nativeImage.createFromPath).toHaveBeenCalledWith(
+      path.resolve(projectRoot, 'dist', 'build', 'tray.ico'),
+    );
+  });
+
+  it('resolveIcons 路径落在 dist/build/ 下（darwin 用 trayTemplate.png）', () => {
+    const deps = makeDeps({ platform: 'darwin', buildDir: path.resolve(projectRoot, 'dist', 'build') });
+    createTrayService(deps as any);
+
+    expect(deps.nativeImage.createFromPath).toHaveBeenCalledWith(
+      path.resolve(projectRoot, 'dist', 'build', 'trayTemplate.png'),
+    );
   });
 });

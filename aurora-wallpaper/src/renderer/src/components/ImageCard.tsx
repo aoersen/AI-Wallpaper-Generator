@@ -7,6 +7,8 @@ interface ImageCardProps {
   onSetWallpaper: (id: string) => void;
   onToggleReference: (record: WallpaperRecord) => void;
   onPreview: (record: WallpaperRecord) => void;
+  /** 解析渲染源：dev 返回 dataUrl，非 dev 返回 filePath 直读；返回空表示加载中 */
+  resolveImgSrc: (filePath: string | undefined) => string;
 }
 
 function statusLabel(progress: GenerateProgress): string {
@@ -20,8 +22,10 @@ function statusLabel(progress: GenerateProgress): string {
   }
 }
 
-export default function ImageCard({ record, progress, selected, onSetWallpaper, onToggleReference, onPreview }: ImageCardProps) {
+export default function ImageCard({ record, progress, selected, onSetWallpaper, onToggleReference, onPreview, resolveImgSrc }: ImageCardProps) {
   const hasImage = record !== null && record.filePath !== '';
+  const imgSrc = hasImage && record ? resolveImgSrc(record.filePath) : '';
+  const showImg = hasImage && imgSrc.length > 0;
   const isFailed = progress !== null && progress.status === 'failed';
   const isGenerating = progress !== null && !['done', 'failed'].includes(progress.status);
   const canSetWallpaper = record !== null && (progress === null || progress.status === 'done');
@@ -29,9 +33,9 @@ export default function ImageCard({ record, progress, selected, onSetWallpaper, 
   return (
     <div className={selected ? 'image-card image-card--selected' : 'image-card'}>
       <div className="image-card__media">
-        {hasImage && record ? (
+        {showImg && record ? (
           <img
-            className="image-card__img" src={record.filePath} alt={record.rawInput || '生成的壁纸'} loading="lazy"
+            className="image-card__img" src={imgSrc} alt={record.rawInput || '生成的壁纸'} loading="lazy"
             role="button" tabIndex={0} aria-label="查看大图"
             onClick={() => onPreview(record)}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPreview(record); } }}

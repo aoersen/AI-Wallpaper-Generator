@@ -236,7 +236,7 @@ export function createDailyService(deps: DailyServiceDeps): DailyService {
         const { setWallpaper } = await import('./wallpaperSetter');
         await setWallpaper(record.filePath);
 
-        return { ok: true };
+        return { ok: true, record };
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) };
       }

@@ -26,6 +26,8 @@ export interface TrayDeps {
   onRotateNow: () => void;
   /** 「退出」回调 */
   onQuit: () => void;
+  /** 系统通知回调（首次隐藏到托盘时调用） */
+  notify?: (title: string, body: string) => void;
   /** 构建产物根目录（生产 = __dirname，测试可注入） */
   buildDir?: string;
 }
@@ -34,6 +36,8 @@ export interface TrayDeps {
 export interface TrayService {
   /** 销毁托盘，释放资源 */
   destroy(): void;
+  /** 首次隐藏到托盘时弹一次通知（幂等，连续调用只生效一次） */
+  notifyBackgroundOnce(): void;
 }
 
 /**
@@ -108,9 +112,18 @@ export function createTrayService(deps: TrayDeps): TrayService {
     }
   });
 
+  // 首次隐藏到托盘通知（幂等）
+  let backgroundNotified = false;
+  function notifyBackgroundOnce(): void {
+    if (backgroundNotified) return;
+    backgroundNotified = true;
+    deps.notify?.('Aurora Wallpaper 仍在后台运行', '定时轮换继续，右键托盘图标恢复窗口');
+  }
+
   return {
     destroy() {
       tray.destroy();
     },
+    notifyBackgroundOnce,
   };
 }

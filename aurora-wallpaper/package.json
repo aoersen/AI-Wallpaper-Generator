@@ -10,9 +10,10 @@
   "scripts": {
     "dev": "concurrently -k \"npm:dev:vite\" \"npm:dev:electron\"",
     "dev:vite": "vite",
-    "dev:electron": "wait-on tcp:5173 && npm run build:main && npm run build:preload && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .",
-    "build": "npm run build:main && npm run build:preload && npm run build:renderer && npm run build:pq-client",
-    "build:main": "tsc -p tsconfig.main.json && node scripts/copy-tray-assets.mjs",
+    "dev:electron": "wait-on tcp:5173 && npm run build:main && npm run build:preload && npm run build:assets && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .",
+    "build": "npm run build:main && npm run build:preload && npm run build:assets && npm run build:renderer && npm run build:pq-client",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:assets": "node scripts/copy-tray-icons.mjs",
     "build:preload": "tsc -p tsconfig.preload.json",
     "build:renderer": "cross-env NODE_ENV=production vite build",
     "build:pq-client": "node scripts/build-pq-client.mjs",
@@ -28,6 +29,8 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
@@ -36,6 +39,7 @@
     "cross-env": "^7.0.3",
     "electron": "^33.3.1",
     "electron-builder": "^25.1.8",
+    "jsdom": "^30.1.1",
     "typescript": "^5.7.2",
     "vite": "^5.4.11",
     "vitest": "^2.1.8",

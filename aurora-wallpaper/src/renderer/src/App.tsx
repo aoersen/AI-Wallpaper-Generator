@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import PromptPanel from './components/PromptPanel';
 import GenerateBar from './components/GenerateBar';
 import ResultGrid, { type ResultGridItem } from './components/ResultGrid';
@@ -9,7 +9,7 @@ import ImagePreview from './components/ImagePreview';
 import {
   getSettings, saveSettings, getScreen, listHistory, deleteHistory,
   setWallpaper, generateImage, onGenerateProgress,
-  listDaily, setDailyWallpaper,
+  listDaily, setDailyWallpaper, toggleFavorite, cancelGenerate, readDataUrl,
 } from './ui/ipcClient';
 import type {
   AppSettings, GenerateMode, ImageAspectRatio,
@@ -63,6 +63,9 @@ export default function App() {
   const [historyRecords, setHistoryRecords] = useState<WallpaperRecord[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [preview, setPreview] = useState<{ src: string; title: string } | null>(null);
+  const [dataUrlCache, setDataUrlCache] = useState<Record<string, string>>({});
+  const cancelledRef = useRef(false);
+  const isDev = import.meta.env.DEV;
 
   const showToast = useCallback((type: 'error' | 'success' | 'info', text: string) => {
     setToast({ type, text });
@@ -115,6 +118,37 @@ export default function App() {
 
   useEffect(() => { loadHistory(); }, [loadHistory]);
 
+  // dev 模式下读取本地图片为 data URL（绕过 file:// CSP 限制）
+  const resolveDataUrl = useCallback(async (filePath: string): Promise<string | null> => {
+    if (!isDev || !filePath) return null;
+    const cached = dataUrlCache[filePath];
+    if (cached) return cached;
+    try {
+      const res = await readDataUrl(filePath);
+      if (res.ok && res.dataUrl) {
+        setDataUrlCache((prev) => ({ ...prev, [filePath]: res.dataUrl! }));
+        return res.dataUrl;
+      }
+    } catch (err) {
+      console.error('readDataUrl error', err);
+    }
+    return null;
+  }, [isDev, dataUrlCache]);
+
+  /** 解析图片渲染 src（dev 走 dataUrl，非 dev 走 file:// 直读）
+   * 供 ImageCard / ImagePreview 直接使用，非 dev 模式返回原 filePath。      */
+  const resolveImgSrc = useCallback((filePath: string | undefined): string => {
+    if (!filePath) return '';
+    if (isDev) {
+      const cached = dataUrlCache[filePath];
+      if (cached) return cached;
+      // dev 模式下无缓存时触发异步加载，本次渲染先返回空（次次渲染拿到缓存）
+      void resolveDataUrl(filePath);
+      return '';
+    }
+    return filePath;
+  }, [isDev, dataUrlCache, resolveDataUrl]);
+
   // 订阅生成进度
   useEffect(() => {
     const unsub = onGenerateProgress((p: GenerateProgress) => {
@@ -162,8 +196,13 @@ export default function App() {
     setDoneCount(0);
     setFailedCount(0);
     setGenerating(true);
+    cancelledRef.current = false;
     try {
       for (let i = 0; i < total; i++) {
+        if (cancelledRef.current) {
+          showToast('info', '已取消生成');
+          break;
+        }
         setGridItems((prev) => {
           const next = [...prev];
           next[i] = { ...next[i], progress: { index: i, total, status: 'requesting', attempts: 1 } };
@@ -175,6 +214,10 @@ export default function App() {
           .map((r) => ({ recordId: r.id, filePath: r.filePath }));
         const mode: GenerateMode = refs.length > 0 ? 'image-to-image' : 'text-to-image';
         const res = await generateImage({ prompt: finalPrompt, rawInput: raw, styleId, size: aspectRatio, mode, references: refs });
+        if (cancelledRef.current) {
+          showToast('info', '已取消生成');
+          break;
+        }
         if (res.ok && res.localPath) {
           setGridItems((prev) => {
             const next = [...prev];
@@ -185,7 +228,7 @@ export default function App() {
                 id: `gen-${Date.now()}-${i}`, fileName: parts.pop() || `${Date.now()}.png`,
                 filePath: res.localPath!, prompt: finalPrompt, rawInput: raw,
                 styleId, size: aspectRatio, mode, fileSize: 0,
-                createdAt: new Date().toISOString(),
+                createdAt: new Date().toISOString(), favorite: false,
               },
               progress: { index: i, total, status: 'done', attempts: res.attempts },
             };
@@ -201,15 +244,28 @@ export default function App() {
           setFailedCount((c) => c + 1);
         }
       }
-      showToast('success', `完成 ${total} 张壁纸生成`);
+      if (!cancelledRef.current) {
+        showToast('success', `完成 ${total} 张壁纸生成`);
+      }
       loadHistory();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '生成失败';
       showToast('error', msg);
     } finally {
       setGenerating(false);
+      cancelledRef.current = false;
     }
   }, [hasApiKey, editingText, raw, count, styleId, aspectRatio, selectedRefIds, historyRecords, loadHistory, showToast]);
+
+  // 取消生成
+  const handleCancelGenerate = useCallback(async () => {
+    cancelledRef.current = true;
+    try {
+      await cancelGenerate();
+    } catch (err) {
+      console.error('cancelGenerate error', err);
+    }
+  }, []);
 
   const handleDeleteHistory = useCallback(async (ids: string[]) => {
     try { await deleteHistory(ids); showToast('info', `已删除 ${ids.length} 条记录`); loadHistory(); }
@@ -259,6 +315,23 @@ export default function App() {
 
   const handleClearRefs = useCallback(() => { setSelectedRefIds([]); setGenerateMode('text-to-image'); }, []);
 
+  // 切换收藏
+  const handleToggleFavorite = useCallback(async (id: string) => {
+    try {
+      const res = await toggleFavorite({ id });
+      if (res.ok) {
+        setHistoryRecords((prev) =>
+          prev.map((r) => (r.id === id ? { ...r, favorite: res.favorite } : r)),
+        );
+        showToast('success', res.favorite ? '已收藏' : '已取消收藏');
+      } else {
+        showToast('error', res.error || '收藏失败');
+      }
+    } catch (err: unknown) {
+      showToast('error', err instanceof Error ? err.message : '操作失败');
+    }
+  }, [showToast]);
+
   // 保存设置：落盘到 userData/settings.json（失败时抛错，由 SettingsDialog 保持弹窗打开）
   const handleSaveSettings = useCallback(async (s: AppSettings) => {
     try {
@@ -272,11 +345,21 @@ export default function App() {
     }
   }, [showToast]);
 
-  // 大图预览
-  const handlePreview = useCallback((src: string, title: string) => { setPreview({ src, title }); }, []);
+  // 大图预览：dev 模式用 dataUrl
+  const handlePreview = useCallback(async (src: string, title: string) => {
+    if (isDev && src) {
+      const dataUrl = await resolveDataUrl(src);
+      setPreview({ src: dataUrl || src, title });
+    } else {
+      setPreview({ src, title });
+    }
+  }, [isDev, resolveDataUrl]);
   const handlePreviewRecord = useCallback((record: WallpaperRecord) => {
-    setPreview({ src: record.filePath, title: record.rawInput || record.fileName });
-  }, []);
+    const src = isDev
+      ? (dataUrlCache[record.filePath] || '')
+      : record.filePath;
+    setPreview({ src, title: record.rawInput || record.fileName });
+  }, [isDev, dataUrlCache]);
   const closePreview = useCallback(() => { setPreview(null); }, []);
 
   // 渲染每日
@@ -307,13 +390,15 @@ export default function App() {
         count={count} onCountChange={setCount} mode={generateMode}
         onGenerate={handleGenerate} generating={generating}
         hasReference={selectedRefIds.length > 0} onClearReferences={handleClearRefs}
-        batchSize={count} doneCount={doneCount} failedCount={failedCount}
+        doneCount={doneCount} failedCount={failedCount}
+        onCancel={handleCancelGenerate}
       />
       <ResultGrid
         items={gridItems}
         onSetWallpaper={(id) => { const item = gridItems.find((i) => i.record?.id === id); if (item?.record) handleSetWallpaperFromRecord(item.record); }}
         onToggleReference={handleToggleReference}
         onPreview={handlePreviewRecord}
+        resolveImgSrc={resolveImgSrc}
       />
     </div>
   );
@@ -327,6 +412,8 @@ export default function App() {
       onToggleReference={handleToggleReference}
       selectedIds={selectedRefIds}
       onPreview={handlePreviewRecord}
+      onToggleFavorite={handleToggleFavorite}
+      resolveImgSrc={resolveImgSrc}
     />
   );
 

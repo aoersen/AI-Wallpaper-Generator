@@ -90,7 +90,7 @@ interface HelperRunResult {
 }
 
 /** 启动助手进程、写入请求、收集输出 */
-function runHelper(binary: string, payload: PerformRequestInput): Promise<HelperRunResult> {
+function runHelper(binary: string, payload: PerformRequestInput, signal?: AbortSignal): Promise<HelperRunResult> {
   return new Promise((resolve) => {
     const child = spawn(binary, [], {
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -112,6 +112,14 @@ function runHelper(binary: string, payload: PerformRequestInput): Promise<Helper
       timedOut = true;
       child.kill();
     }, Math.max(0, payload.timeoutMs) + KILL_GRACE_MS);
+
+    // 支持 abort 时 kill 子进程
+    if (signal) {
+      signal.addEventListener('abort', () => {
+        if (settled) return;
+        child.kill();
+      }, { once: true });
+    }
 
     child.stdout.on('data', (chunk: Buffer) => {
       if (stdout.length < MAX_STDOUT) stdout += chunk.toString('utf8');
@@ -149,8 +157,9 @@ function parseHelperOutput(stdout: string): HelperResult | null {
 /**
  * 执行一次 HTTP POST 请求（委托 pq-client 助手）。
  * 成功返回 { status, bodyText }；超时抛 QwenError(TIMEOUT)；其余抛 QwenError(NETWORK_ERROR)。
+ * 传入 signal 时，abort 会 kill 子进程并返回取消错误。
  */
-export async function performRequest(input: PerformRequestInput): Promise<PerformRequestResult> {
+export async function performRequest(input: PerformRequestInput, signal?: AbortSignal): Promise<PerformRequestResult> {
   const binary = resolveBinaryPath();
   if (!binary) {
     throw new QwenError(
@@ -159,9 +168,17 @@ export async function performRequest(input: PerformRequestInput): Promise<Perfor
     );
   }
 
-  const timeoutSeconds = Math.max(1, Math.round(input.timeoutMs / 1000));
-  const run = await runHelper(binary, input);
+  if (signal?.aborted) {
+    throw new QwenError('NETWORK_ERROR', '请求已取消');
+  }
 
+  const timeoutSeconds = Math.max(1, Math.round(input.timeoutMs / 1000));
+  const run = await runHelper(binary, input, signal);
+
+  // abort 导致的 kill（优先判断，避免被 timedOut 覆盖）
+  if (signal?.aborted) {
+    throw new QwenError('NETWORK_ERROR', '请求已取消');
+  }
   if (run.timedOut) {
     throw new QwenError('TIMEOUT', `请求超时（${timeoutSeconds} 秒）`);
   }

@@ -11,12 +11,15 @@ import type {
   GenerateResult,
   HistoryPayload,
   PlatformInfo,
+  ReadDataUrlResult,
+  RotationSettings,
   SaveSettingsRequest,
   SaveSettingsResult,
   ScreenInfo,
   SetWallpaperRequest,
   SetWallpaperResult,
   SettingsPayload,
+  ToggleFavoriteResult,
 } from '../types';
 
 /** 全局 window.aurora 声明（preload 通过 contextBridge.exposeInMainWorld('aurora', api) 暴露） */
@@ -35,6 +38,22 @@ declare global {
       /** 1a 新增 —— 每日图片 */
       listDaily(): Promise<DailyListResult>;
       setDailyWallpaper(req: { url: string; fileName: string }): Promise<SetWallpaperResult>;
+      /** 打开日志目录（userData/logs） */
+      openLogDir(): Promise<void>;
+      /** 切换收藏状态 */
+      toggleFavorite(req: { id: string }): Promise<ToggleFavoriteResult>;
+      /** 取消当前生成任务 */
+      cancelGenerate(): Promise<void>;
+      /** 读取本地壁纸文件为 base64 data URL（dev 模式绕过 file:// CSP 限制） */
+      readDataUrl(filePath: string): Promise<ReadDataUrlResult>;
+
+      /* 壁纸轮换 */
+      /** 读取当前轮换设置 */
+      getRotationSettings(): Promise<RotationSettings>;
+      /** 保存轮换设置 */
+      saveRotationSettings(rotation: RotationSettings): Promise<RotationSettings>;
+      /** 手动触发一次轮换 */
+      rotateNow(): Promise<boolean>;
     };
   }
 }
@@ -58,3 +77,13 @@ export const getScreen = (): Promise<ScreenInfo> => api.getScreen();
 export const listDaily = (): Promise<DailyListResult> => api.listDaily();
 export const setDailyWallpaper = (req: { url: string; fileName: string }): Promise<SetWallpaperResult> =>
   api.setDailyWallpaper(req);
+export const toggleFavorite = (req: { id: string }): Promise<ToggleFavoriteResult> =>
+  api.toggleFavorite(req);
+export const cancelGenerate = (): Promise<void> => api.cancelGenerate();
+export const readDataUrl = (filePath: string): Promise<ReadDataUrlResult> => api.readDataUrl(filePath);
+
+/* 壁纸轮换 */
+export const getRotationSettings = (): Promise<RotationSettings> => api.getRotationSettings();
+export const saveRotationSettings = (rotation: RotationSettings): Promise<RotationSettings> =>
+  api.saveRotationSettings(rotation);
+export const rotateNow = (): Promise<boolean> => api.rotateNow();

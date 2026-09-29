@@ -10,6 +10,18 @@
 /* 设置                                                                */
 /* ------------------------------------------------------------------ */
 
+/** 壁纸轮换设置 */
+export interface RotationSettings {
+  /** 是否启用定时轮换 */
+  enabled: boolean;
+  /** 轮换间隔分钟（≥15） */
+  intervalMinutes: number;
+  /** 图片来源 */
+  source: 'bing' | 'history' | 'favorites';
+  /** 选图顺序 */
+  order: 'random' | 'newest';
+}
+
 /** 应用设置（持久化到 userData/settings.json） */
 export interface AppSettings {
   /** Chat2API 兼容接口 Base URL，默认 https://www.likegpt.top/v1 */
@@ -22,6 +34,10 @@ export interface AppSettings {
   retryIntervalMs: number;
   /** 请求超时毫秒（默认 120000，≥120s） */
   requestTimeoutMs: number;
+  /** 图片生成模型名，默认 qwen-image */
+  model: string;
+  /** 壁纸轮换设置 */
+  rotation: RotationSettings;
 }
 
 export const DEFAULT_BASE_URL = 'https://www.likegpt.top/v1';
@@ -32,6 +48,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   retryLimit: 2,
   retryIntervalMs: 2000,
   requestTimeoutMs: 120_000,
+  model: 'qwen-image',
+  rotation: {
+    enabled: false,
+    intervalMinutes: 60,
+    source: 'bing',
+    order: 'random',
+  },
 };
 
 /** 设置读取结果 */
@@ -138,6 +161,8 @@ export interface WallpaperRecord {
   fileSize: number;
   /** 创建时间（ISO 字符串） */
   createdAt: string;
+  /** 是否收藏（v2 新增，默认 false） */
+  favorite: boolean;
 }
 
 /** 历史列表响应 */
@@ -154,6 +179,19 @@ export interface DeleteHistoryRequest {
 export interface DeleteHistoryResult {
   ok: boolean;
   deleted: string[];
+}
+
+/** 切换收藏请求 */
+export interface ToggleFavoriteRequest {
+  id: string;
+}
+
+/** 切换收藏结果 */
+export interface ToggleFavoriteResult {
+  ok: boolean;
+  favorite: boolean;
+  /** 失败时的错误信息（如收藏已达上限 100 张） */
+  error?: string;
 }
 
 /** 壁纸下载/转存请求（生成成功后立即转存，URL 有时效性） */
@@ -187,6 +225,15 @@ export interface SetWallpaperRequest {
 export interface SetWallpaperResult {
   ok: boolean;
   /** 失败时的中文错误信息（含平台命令输出/退出码） */
+  error?: string;
+  /** 成功时：转存的壁纸记录（bing 来源经 wallpaperStore 下载转存后返回） */
+  record?: WallpaperRecord;
+}
+
+/** 读取本地壁纸文件为 base64 data URL 的结果 */
+export interface ReadDataUrlResult {
+  ok: boolean;
+  dataUrl?: string;
   error?: string;
 }
 

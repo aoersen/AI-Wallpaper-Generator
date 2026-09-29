@@ -72,14 +72,13 @@ describe('wallpaperSetter', () => {
   });
 
   describe('错误分支', () => {
-    it('stderr 非空时抛出错误（含 stderr 内容）', async () => {
+    it('win32 不检查 stderr，退出码为 0 时成功返回', async () => {
       const mockExec = vi.fn().mockResolvedValue({ stdout: '', stderr: 'SystemParametersInfo returned 0 (failure)' });
       const filePath = 'C:\\test\\wall.png';
 
+      // win32 只信任退出码，stderr 非空不影响结果
       await expect(setWallpaper(filePath, { platform: 'win32', execFile: mockExec }))
-        .rejects.toThrow(/设置壁纸失败/);
-      await expect(setWallpaper(filePath, { platform: 'win32', execFile: mockExec }))
-        .rejects.toThrow(/SystemParametersInfo returned 0/);
+        .resolves.not.toThrow();
     });
 
     it('darwin stderr 非空时抛出错误', async () => {

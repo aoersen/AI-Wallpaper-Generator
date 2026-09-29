@@ -21,8 +21,20 @@ export interface GenerateDeps {
 export function registerGenerateHandlers(deps: GenerateDeps): void {
   const { settingsService, wallpaperStore, sendProgress } = deps;
 
+  // 维护当前生成任务的 AbortController（单并发）
+  let currentController: AbortController | null = null;
+
+  ipcMain.handle(IPC.GENERATE_CANCEL, (): void => {
+    currentController?.abort();
+    currentController = null;
+  });
+
   ipcMain.handle(IPC.GENERATE_IMAGE, async (_event, req: GenerateRequest): Promise<GenerateResult> => {
     const settings = settingsService.loadSettings();
+
+    // 创建新的 AbortController
+    const controller = new AbortController();
+    currentController = controller;
 
     // 初始进度：requesting
     sendProgress({
@@ -47,6 +59,7 @@ export function registerGenerateHandlers(deps: GenerateDeps): void {
         {
           maxAttempts: settings.retryLimit + 1,
           intervalMs: settings.retryIntervalMs,
+          signal: controller.signal,
           onAttempt: (attempt) => {
             attempts = attempt;
             sendProgress({
@@ -69,6 +82,7 @@ export function registerGenerateHandlers(deps: GenerateDeps): void {
         attempts,
         message,
       });
+      currentController = null;
       return { ok: false, error: message, attempts };
     }
 
@@ -101,6 +115,7 @@ export function registerGenerateHandlers(deps: GenerateDeps): void {
         message: '生成完成',
       });
 
+      currentController = null;
       return { ok: true, imageUrl, localPath: record.filePath, attempts };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -111,6 +126,7 @@ export function registerGenerateHandlers(deps: GenerateDeps): void {
         attempts,
         message,
       });
+      currentController = null;
       return { ok: false, error: message, attempts };
     }
   });

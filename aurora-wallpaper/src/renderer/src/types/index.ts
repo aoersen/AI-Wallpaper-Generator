@@ -3,6 +3,13 @@
  * 对应 src/shared/types.ts 的字段语义在 phase-1a 后保持一致
  */
 
+export interface RotationSettings {
+  enabled: boolean;
+  intervalMinutes: number;
+  source: 'bing' | 'history' | 'favorites';
+  order: 'random' | 'newest';
+}
+
 export interface AppSettings {
   baseURL: string;
   apiKey: string;
@@ -11,6 +18,8 @@ export interface AppSettings {
   requestTimeoutMs: number;
   /** 图片生成模型名，默认 qwen-image */
   model: string;
+  /** 壁纸轮换设置 */
+  rotation: RotationSettings;
 }
 
 export const DEFAULT_BASE_URL = 'https://www.likegpt.top/v1';
@@ -22,6 +31,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   retryIntervalMs: 2000,
   requestTimeoutMs: 120_000,
   model: 'qwen-image',
+  rotation: {
+    enabled: false,
+    intervalMinutes: 60,
+    source: 'bing',
+    order: 'random',
+  },
 }
 
 export interface SettingsPayload {
@@ -82,6 +97,8 @@ export interface WallpaperRecord {
   mode: GenerateMode;
   fileSize: number;
   createdAt: string;
+  /** 是否收藏（v2 新增，默认 false） */
+  favorite: boolean;
 }
 
 export interface HistoryPayload {
@@ -133,9 +150,23 @@ export interface ScreenInfo {
   aspectRatio: ImageAspectRatio;
 }
 
-export interface IpcError {
-  ok: false;
-  error: string;
+export interface ReadDataUrlResult {
+  ok: boolean;
+  dataUrl?: string;
+  error?: string;
+}
+
+/** 切换收藏请求 */
+export interface ToggleFavoriteRequest {
+  id: string;
+}
+
+/** 切换收藏结果 */
+export interface ToggleFavoriteResult {
+  ok: boolean;
+  favorite: boolean;
+  /** 失败时的错误信息（如收藏已达上限 100 张） */
+  error?: string;
 }
 
 export interface SessionContext {

@@ -368,6 +368,31 @@ describe('createDailyService.setDailyWallpaper · URL 白名单与全链路', ()
     expect(store.list()).toHaveLength(1); // 复用既有壁纸库目录体系
   });
 
+  it('setDailyWallpaper 成功时返回 record 字段（含 filePath）', async () => {
+    const fakePng = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(fakePng, { status: 200, headers: { 'content-type': 'image/png' } }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const store = createWallpaperStore(tmpRoot);
+    const service = createDailyService({
+      wallpaperStore: store,
+      now: () => FIXED_NOW_MS,
+      request: vi.fn(),
+    });
+
+    const result = await service.setDailyWallpaper({
+      url: 'https://cn.bing.com/th?id=OHR.RecordTest_ZH-CN.jpg',
+      fileName: 'record-test.jpg',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.record).toBeDefined();
+    expect(result.record!.filePath).toBeTruthy();
+    expect(result.record!.fileName).toMatch(/^wallpaper-.+\.png$/);
+  });
+
   it('下载失败（HTTP 404）返回失败且不设置壁纸', async () => {
     vi.stubGlobal(
       'fetch',

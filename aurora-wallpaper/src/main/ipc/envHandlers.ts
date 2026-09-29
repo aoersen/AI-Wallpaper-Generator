@@ -2,7 +2,8 @@
  * Aurora Wallpaper — 环境信息 IPC 处理器
  */
 
-import { ipcMain, screen } from 'electron';
+import { app, ipcMain, screen, shell } from 'electron';
+import path from 'node:path';
 import { IPC } from '../../shared/ipc';
 import type { ImageAspectRatio, PlatformInfo, ScreenInfo } from '../../shared/types';
 
@@ -52,5 +53,9 @@ export function registerEnvHandlers(): void {
       scaleFactor,
       aspectRatio: aspectRatioToString(width, height),
     };
+  });
+
+  ipcMain.handle(IPC.ENV_OPEN_LOG_DIR, (): void => {
+    void shell.openPath(path.join(app.getPath('userData'), 'logs'));
   });
 }

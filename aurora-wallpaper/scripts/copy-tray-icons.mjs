@@ -22,17 +22,17 @@ const assets = [
 const srcDir = path.join(projectRoot, 'build');
 const destDir = path.join(projectRoot, 'dist', 'build');
 
-if (!fs.existsSync(destDir)) {
-  fs.mkdirSync(destDir, { recursive: true });
-}
+fs.mkdirSync(destDir, { recursive: true });
 
 for (const asset of assets) {
   const src = path.join(srcDir, asset);
   const dest = path.join(destDir, asset);
   if (!fs.existsSync(src)) {
-    console.error(`[copy-tray-assets] 源文件不存在: ${src}`);
+    console.error(`[copy-tray-icons] 源文件不存在: ${src}`);
     process.exit(1);
   }
   fs.copyFileSync(src, dest);
-  console.log(`[copy-tray-assets] ${asset} → dist/build/${asset}`);
+  console.log(`[copy-tray-icons] ✓ ${asset} → dist/build/${asset}`);
 }
+
+console.log(`[copy-tray-icons] 完成，共复制 ${assets.length} 个文件`);

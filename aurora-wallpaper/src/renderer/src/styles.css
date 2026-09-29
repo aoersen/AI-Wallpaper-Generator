@@ -1406,6 +1406,118 @@ img {
 }
 
 /* ------------------------------------------------------------------ */
+/* 定时轮换                                                              */
+/* ------------------------------------------------------------------ */
+
+.rotation-section {
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border-light);
+}
+
+.rotation-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+}
+
+.rotation-section__title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.rotation-section__switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.rotation-section__switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.rotation-section__switch-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background var(--transition-base);
+}
+
+.rotation-section__switch-slider::before {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 3px;
+  top: 3px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  transition: transform var(--transition-base);
+}
+
+.rotation-section__switch input:checked + .rotation-section__switch-slider {
+  background: var(--brand);
+}
+
+.rotation-section__switch input:checked + .rotation-section__switch-slider::before {
+  transform: translateX(20px);
+}
+
+.rotation-section__switch input:focus-visible + .rotation-section__switch-slider {
+  box-shadow: 0 0 0 3px var(--brand-glow);
+}
+
+.rotation-section__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  transition: opacity var(--transition-base);
+}
+
+.rotation-section__body.is-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.rotation-row {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.rotation-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.rotation-field .field__label {
+  margin-bottom: 0;
+}
+
+.field__input--static {
+  display: flex;
+  align-items: center;
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+  cursor: default;
+}
+
+.rotation-now-btn {
+  align-self: flex-start;
+}
+
+/* ------------------------------------------------------------------ */
 /* 历史记录                                                              */
 /* ------------------------------------------------------------------ */
 
@@ -1529,6 +1641,74 @@ img {
   width: 15px;
   height: 15px;
   cursor: pointer;
+}
+
+/* ------------------------------------------------------------------ */
+/* 收藏心形角标                                                           */
+/* ------------------------------------------------------------------ */
+
+.history-item__favorite {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: all var(--transition-base);
+  z-index: 2;
+}
+
+.history-item__favorite:hover {
+  transform: scale(1.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+
+.history-item__favorite.is-active {
+  background: #fff0f0;
+  color: #ef4444;
+}
+
+/* ------------------------------------------------------------------ */
+/* 仅看收藏筛选                                                           */
+/* ------------------------------------------------------------------ */
+
+.history-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.history-filter__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-card);
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.history-filter__btn:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.history-filter__btn.is-active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
 }
 
 /* ------------------------------------------------------------------ */

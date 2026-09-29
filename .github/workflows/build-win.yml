@@ -1,0 +1,62 @@
+name: build-windows
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: aurora-wallpaper/package-lock.json
+
+      - name: 安装依赖
+        run: npm ci
+        working-directory: aurora-wallpaper
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '>=1.24.0'
+
+      - name: 构建 pq-client（win-x64）
+        run: node scripts/build-pq-client.mjs
+        working-directory: aurora-wallpaper
+
+      - name: 运行测试
+        run: npm test
+        working-directory: aurora-wallpaper
+
+      - name: 构建 Windows 安装包
+        run: npm run dist:win
+        working-directory: aurora-wallpaper
+        env:
+          ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-wallpaper-win
+          path: |
+            aurora-wallpaper/release/*.exe
+            aurora-wallpaper/release/*.exe.blockmap
+
+      - name: 发布到 GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          release_name: ${{ github.ref_name }}
+          prerelease: true
+          files: |
+            aurora-wallpaper/release/*.exe
+            aurora-wallpaper/release/*.exe.blockmap

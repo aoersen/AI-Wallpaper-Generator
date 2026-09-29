@@ -33,9 +33,7 @@ let isQuitting = false;
 /** 主窗口引用 */
 let mainWindow: BrowserWindow | null = null;
 /** 托盘服务引用 */
-let trayService: { destroy(): void } | null = null;
-/** 首次隐藏到托盘通知是否已发送（保证仅弹一次） */
-let trayTipShown = false;
+let trayService: { destroy(): void; notifyBackgroundOnce(): void } | null = null;
 
 /** 创建主窗口 */
 function createWindow(): void {
@@ -71,16 +69,8 @@ function createWindow(): void {
     if (!isQuitting) {
       event.preventDefault();
       mainWindow?.hide();
-      // 首次隐藏到托盘时弹一次通知
-      if (!trayTipShown) {
-        trayTipShown = true;
-        if (Notification.isSupported()) {
-          new Notification({
-            title: 'Aurora Wallpaper 仍在后台运行',
-            body: '定时轮换继续，右键托盘图标恢复窗口',
-          }).show();
-        }
-      }
+      // 首次隐藏到托盘时弹一次通知（由 trayService 幂等保证）
+      trayService?.notifyBackgroundOnce();
     }
   });
 
@@ -174,6 +164,11 @@ if (!app.requestSingleInstanceLock()) {
       onQuit: () => {
         isQuitting = true;
         app.quit();
+      },
+      notify: (title, body) => {
+        if (Notification.isSupported()) {
+          new Notification({ title, body }).show();
+        }
       },
       buildDir: path.join(__dirname, '..', 'build'),
     });
