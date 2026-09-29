@@ -23,6 +23,7 @@
     "icons": "node scripts/make-icons.mjs"
   },
   "dependencies": {
+    "electron-log": "^5.4.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

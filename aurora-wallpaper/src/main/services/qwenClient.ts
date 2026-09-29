@@ -38,6 +38,8 @@ export interface RetryOptions {
   intervalMs?: number;
   /** 每次尝试前回调（用于上报进度） */
   onAttempt?: (attempt: number, maxAttempts: number) => void;
+  /** 取消信号，abort 时 kill 子进程 */
+  signal?: AbortSignal;
 }
 
 /* ------------------------------------------------------------------ */
@@ -98,7 +100,7 @@ function extractImageUrl(body: unknown): string {
 /* ------------------------------------------------------------------ */
 
 /** 单次请求（无重试），超时与网络失败由传输层抛 QwenError */
-async function requestOnce(params: GenerateImageParams): Promise<GenerateImageResult> {
+async function requestOnce(params: GenerateImageParams, signal?: AbortSignal): Promise<GenerateImageResult> {
   const { prompt, referenceImages, size, settings } = params;
 
   if (!settings.apiKey.trim()) {
@@ -107,7 +109,7 @@ async function requestOnce(params: GenerateImageParams): Promise<GenerateImageRe
 
   const url = `${settings.baseURL.replace(/\/$/, '')}/chat/completions`;
   const body = {
-    model: 'qwen-image',
+    model: settings.model || 'qwen-image',
     stream: false,
     messages: [{ role: 'user', content: buildContent(prompt, referenceImages) }],
     size,
@@ -120,7 +122,7 @@ async function requestOnce(params: GenerateImageParams): Promise<GenerateImageRe
     apiKey: settings.apiKey.trim(),
     body,
     timeoutMs,
-  });
+  }, signal);
 
   if (status < 200 || status >= 300) {
     throw new QwenError('HTTP_ERROR', `HTTP 错误 ${status}${bodyText ? `：${bodyText.slice(0, 200)}` : ''}`);
@@ -155,13 +157,21 @@ export async function generateImageWithRetry(
 
   let lastError: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    // 检查是否已取消
+    if (options.signal?.aborted) {
+      throw new QwenError('NETWORK_ERROR', '请求已取消');
+    }
     options.onAttempt?.(attempt, maxAttempts);
     try {
-      return await requestOnce(params);
+      return await requestOnce(params, options.signal);
     } catch (err) {
       lastError = err;
       // NO_API_KEY 不重试
       if (err instanceof QwenError && err.code === 'NO_API_KEY') {
+        throw err;
+      }
+      // 已取消，直接抛出不重试
+      if (err instanceof QwenError && err.message === '请求已取消') {
         throw err;
       }
       if (attempt < maxAttempts) {

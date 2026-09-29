@@ -9,6 +9,8 @@ export interface AppSettings {
   retryLimit: number;
   retryIntervalMs: number;
   requestTimeoutMs: number;
+  /** 图片生成模型名，默认 qwen-image */
+  model: string;
 }
 
 export const DEFAULT_BASE_URL = 'https://www.likegpt.top/v1';
@@ -19,6 +21,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   retryLimit: 2,
   retryIntervalMs: 2000,
   requestTimeoutMs: 120_000,
+  model: 'qwen-image',
 }
 
 export interface SettingsPayload {

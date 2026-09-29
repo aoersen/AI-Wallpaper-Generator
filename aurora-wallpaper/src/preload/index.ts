@@ -3,6 +3,7 @@
  *
  * contextIsolation 开启，通过 contextBridge 暴露类型化的 `window.aurora` API。
  * phase-1a：接入每日图片域（listDaily / setDailyWallpaper），其余通道此前已实现。
+ * phase-1c：生成可取消（cancelGenerate）、dev 图片 data URL（readDataUrl）。
  */
 
 import { contextBridge, ipcRenderer } from 'electron';
@@ -31,12 +32,16 @@ export interface AuroraApi {
 
   /* 生成 */
   generateImage(req: GenerateRequest): Promise<GenerateResult>;
+  /** 取消当前生成任务 */
+  cancelGenerate(): Promise<void>;
   /** 订阅批量生成进度事件，返回取消订阅函数 */
   onGenerateProgress(listener: (progress: GenerateProgress) => void): () => void;
 
   /* 壁纸 */
   downloadWallpaper(req: DownloadWallpaperRequest): Promise<DownloadWallpaperResult>;
   setWallpaper(req: SetWallpaperRequest): Promise<SetWallpaperResult>;
+  /** 读取本地壁纸文件为 base64 data URL（dev 模式绕过 file:// CSP 限制） */
+  readDataUrl(filePath: string): Promise<string>;
 
   /* 每日图片（Bing 每日壁纸 + 今日 AI 主题） */
   /** 拉取每日图片数据：Bing 近 8 天壁纸 + 今日 6 个 AI 主题（确定性轮换） */
@@ -58,6 +63,7 @@ const api: AuroraApi = {
   saveSettings: (req) => ipcRenderer.invoke(IPC.SETTINGS_SAVE, req) as Promise<SaveSettingsResult>,
 
   generateImage: (req) => ipcRenderer.invoke(IPC.GENERATE_IMAGE, req) as Promise<GenerateResult>,
+  cancelGenerate: () => ipcRenderer.invoke(IPC.GENERATE_CANCEL) as Promise<void>,
   onGenerateProgress: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, progress: GenerateProgress): void => listener(progress);
     ipcRenderer.on(IPC.GENERATE_PROGRESS, handler);
@@ -68,6 +74,7 @@ const api: AuroraApi = {
 
   downloadWallpaper: (req) => ipcRenderer.invoke(IPC.WALLPAPER_DOWNLOAD, req) as Promise<DownloadWallpaperResult>,
   setWallpaper: (req) => ipcRenderer.invoke(IPC.WALLPAPER_SET, req) as Promise<SetWallpaperResult>,
+  readDataUrl: (filePath) => ipcRenderer.invoke(IPC.WALLPAPER_READ_DATA_URL, { filePath }) as Promise<string>,
 
   listDaily: () => ipcRenderer.invoke(IPC.DAILY_LIST) as Promise<DailyListResult>,
   setDailyWallpaper: (req) => ipcRenderer.invoke(IPC.DAILY_SET_WALLPAPER, req) as Promise<SetWallpaperResult>,

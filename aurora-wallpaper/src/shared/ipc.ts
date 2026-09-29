@@ -42,6 +42,8 @@ export const IPC = {
   GENERATE_IMAGE: 'generate:image',
   /** 批量生成进度事件（主进程 → 渲染进程，send 型） */
   GENERATE_PROGRESS: 'generate:progress',
+  /** 取消当前生成任务 */
+  GENERATE_CANCEL: 'generate:cancel',
 
   /** 下载生成的图片 URL 并转存到本地壁纸库 */
   WALLPAPER_DOWNLOAD: 'wallpaper:download',
@@ -78,6 +80,7 @@ export type IpcRequestMap = {
   [IPC.SETTINGS_GET]: void;
   [IPC.SETTINGS_SAVE]: SaveSettingsRequest;
   [IPC.GENERATE_IMAGE]: GenerateRequest;
+  [IPC.GENERATE_CANCEL]: void;
   [IPC.WALLPAPER_DOWNLOAD]: DownloadWallpaperRequest;
   [IPC.WALLPAPER_SET]: SetWallpaperRequest;
   [IPC.WALLPAPER_READ_DATA_URL]: { filePath: string };
@@ -94,9 +97,10 @@ export type IpcResponseMap = {
   [IPC.SETTINGS_GET]: SettingsPayload;
   [IPC.SETTINGS_SAVE]: SaveSettingsResult;
   [IPC.GENERATE_IMAGE]: GenerateResult;
+  [IPC.GENERATE_CANCEL]: void;
   [IPC.WALLPAPER_DOWNLOAD]: DownloadWallpaperResult;
   [IPC.WALLPAPER_SET]: SetWallpaperResult;
-  [IPC.WALLPAPER_READ_DATA_URL]: { dataUrl: string };
+  [IPC.WALLPAPER_READ_DATA_URL]: string;
   [IPC.DAILY_LIST]: DailyListResult;
   [IPC.DAILY_SET_WALLPAPER]: SetWallpaperResult;
   [IPC.HISTORY_LIST]: HistoryPayload;

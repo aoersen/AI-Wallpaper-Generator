@@ -1,16 +1,20 @@
 /**
  * Aurora Wallpaper — Electron 主进程入口
  *
- * phase-2：注册全部业务 IPC 处理器（设置/生成/壁纸/历史/环境）。
- * phase-1a：新增每日图片域（daily:*）：Bing 每日壁纸拉取 + 今日 AI 主题推荐。
+ * phase-3：托盘常驻，关窗不退出（保留后台轮换）
+ * phase-2：注册全部业务 IPC 处理器
+ * phase-1a：每日图片域（bing + 主题池）
+ * phase-1c：sandbox: true，electron-log，WALLPAPER_READ_DATA_URL
  */
 
-import { app, BrowserWindow, shell } from 'electron';
+import { app, BrowserWindow, Notification, powerMonitor, shell } from 'electron';
 import path from 'node:path';
+import log from 'electron-log/main';
 import { IPC } from '../shared/ipc';
 import type { GenerateProgress } from '../shared/types';
 import { createSettingsService } from './services/settings';
 import { createWallpaperStore } from './services/wallpaperStore';
+import { createTrayService } from './services/trayService';
 import { registerSettingsHandlers } from './ipc/settingsHandlers';
 import { registerGenerateHandlers } from './ipc/generateHandlers';
 import { registerWallpaperHandlers } from './ipc/wallpaperHandlers';
@@ -18,15 +22,18 @@ import { registerHistoryHandlers } from './ipc/historyHandlers';
 import { registerEnvHandlers } from './ipc/envHandlers';
 import { createDailyService } from './services/dailyService';
 import { registerDailyHandlers } from './ipc/dailyHandlers';
+import { createSchedulerService } from './services/schedulerService';
+import { registerRotationHandlers } from './ipc/rotationHandlers';
 
-/** 开发模式下 Vite dev server 地址（由 dev:electron 脚本注入） */
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
-
-/** 是否开发模式 */
 const isDev = Boolean(DEV_SERVER_URL);
 
-/** 主窗口引用（避免被 GC 回收） */
+/** 全局：是否正在主动退出（exit menu / before-quit）。用于区分「关窗」与「真退出」。 */
+let isQuitting = false;
+/** 主窗口引用 */
 let mainWindow: BrowserWindow | null = null;
+/** 托盘服务引用 */
+let trayService: { destroy(): void } | null = null;
 
 /** 创建主窗口 */
 function createWindow(): void {
@@ -43,38 +50,41 @@ function createWindow(): void {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
       webSecurity: true,
     },
   });
 
-  // 就绪后再显示，避免白屏闪烁
   mainWindow.on('ready-to-show', () => {
     mainWindow?.show();
   });
 
-  // 外部链接交给系统默认浏览器，不在应用内导航
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url);
     return { action: 'deny' };
+  });
+
+  // 关闭窗口：非退出态 → 隐藏到托盘；退出态 → 允许关闭
+  mainWindow.on('close', (event) => {
+    if (!isQuitting) {
+      event.preventDefault();
+      mainWindow?.hide();
+    }
+  });
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
   });
 
   if (isDev) {
     void mainWindow.loadURL(DEV_SERVER_URL!);
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
-    // 生产模式加载 vite 构建产物。
-    // 注意：__dirname 为 dist/main（打包后为 app.asar/dist/main），
-    // 需上溯两级才能到达项目根的 dist-renderer。
     void mainWindow.loadFile(path.join(__dirname, '../../dist-renderer/index.html'));
   }
-
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
 }
 
-// 单实例锁：重复启动时聚焦已有窗口
+// 单实例锁
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
@@ -85,44 +95,118 @@ if (!app.requestSingleInstanceLock()) {
     }
   });
 
-  app.whenReady().then(() => {
-    // 组装服务层（依赖注入）
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.aurora.wallpaper');
+  }
+
+  // 任何真正的退出路径都经过这里，便于统一置位
+  app.on('before-quit', () => {
+    isQuitting = true;
+  });
+
+  app.whenReady().then(async () => {
+    log.initialize();
+    log.transports.file.maxSize = 5 * 1024 * 1024;
+    log.transports.file.level = 'info';
+    log.transports.console.level = 'info';
+    log.info('Aurora Wallpaper 启动');
+
+    process.on('uncaughtException', (err) => log.error('uncaughtException', err));
+    process.on('unhandledRejection', (err) => log.error('unhandledRejection', err));
+
+    // 服务组装
     const settingsService = createSettingsService({
       getUserDataPath: () => app.getPath('userData'),
     });
     const wallpaperStore = createWallpaperStore(app.getPath('userData'));
 
-    // 向渲染进程发送进度事件
-    const sendProgress = (progress: GenerateProgress): void => {
+    const sendProgress = (progress: GenerateProgress) => {
       mainWindow?.webContents.send(IPC.GENERATE_PROGRESS, progress);
     };
 
-    // 组装每日图片服务（Bing 每日壁纸 + 本地主题池）
-    // 壁纸库复用 userData/wallpapers 既有目录体系（下载转存、修剪、历史）
     const dailyService = createDailyService({ wallpaperStore });
 
-    // 注册 IPC 处理器
+    const schedulerService = createSchedulerService({
+      settingsService,
+      dailyService,
+      wallpaperStore,
+      getUserDataPath: () => app.getPath('userData'),
+      powerMonitor,
+    });
+
+    // IPC
     registerSettingsHandlers(settingsService);
     registerDailyHandlers({ dailyService });
     registerGenerateHandlers({ settingsService, wallpaperStore, sendProgress });
     registerWallpaperHandlers({ wallpaperStore });
     registerHistoryHandlers({ wallpaperStore });
     registerEnvHandlers();
+    registerRotationHandlers({ settingsService, schedulerService });
+
+    schedulerService.start();
+
+    // 「立即换一张」 — 复用 schedulerService.rotateNow()
+    const rotateNow = () => {
+      void schedulerService.rotateNow();
+    };
+
+    // 创建托盘（依赖注入，buildDir 指向 dist/main 同级）
+    trayService = createTrayService({
+      // 动态 import 避免循环引用（Tray 在 main process 可用）
+      Tray: (await import('electron')).Tray,
+      Menu: (await import('electron')).Menu,
+      nativeImage: (await import('electron')).nativeImage,
+      platform: process.platform,
+      getMainWindow: () => mainWindow,
+      onRotateNow: rotateNow,
+      onQuit: () => {
+        isQuitting = true;
+        app.quit();
+      },
+      notify: (title: string, body: string) => {
+        if (Notification.isSupported()) {
+          new Notification({ title, body }).show();
+          return true;
+        }
+        return false;
+      },
+      buildDir: path.join(__dirname, '..', 'build'),
+    });
 
     createWindow();
 
+    // 首次隐藏到托盘通知
+    app.on('browser-window-blur', () => {
+      // 关窗后托盘图标出现；正式隐藏由 close 事件控制
+      // 此处只负责「首次」通知
+      if (mainWindow && !mainWindow.isVisible()) {
+        if (Notification.isSupported()) {
+          new Notification({
+            title: 'Aurora Wallpaper 仍在后台运行',
+            body: '定时轮换继续，右键托盘图标恢复窗口',
+          }).show();
+        }
+      }
+    });
+
     app.on('activate', () => {
-      // macOS：点击 Dock 图标且无窗口时重建
       if (BrowserWindow.getAllWindows().length === 0) {
         createWindow();
       }
     });
+
+    // 程序退出清理
+    app.on('will-quit', () => {
+      trayService?.destroy();
+    });
   });
 
-  // Windows/Linux：关闭全部窗口即退出
+  // 关键修复：非 darwin 不再立即退出，由托盘保持后台
   app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') {
-      app.quit();
+    if (process.platform === 'darwin') {
+      // macOS 保持传统：无窗口 + 用户点 X → 由托盘接管（同 Win/Linux）
+      // 注意：macOS 上点 X 不会自动 quit，托盘常驻语义统一
     }
+    // Windows/Linux + 有托盘 → 不退出，托盘继续运行
   });
 }
